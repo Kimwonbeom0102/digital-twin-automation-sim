@@ -1,0 +1,48 @@
+# ========================
+# Unity generated folders
+# ========================
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+# ========================
+# OS generated files
+# ========================
+.DS_Store
+Thumbs.db
+
+# ========================
+# Visual Studio / Rider
+# ========================
+.vs/
+.vscode/
+*.csproj
+*.sln
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+
+# ========================
+# Unity meta files
+# ========================
+*.pidb.meta
+*.pdb.meta
+
+# ========================
+# Crash reports
+# ========================
+sysinfo.txt
+
+# ========================
+# Addressables & Cache
+# ========================
+/Library/com.unity.addressables/
+/Library/com.unity.scriptablebuildpipeline/
+
+
