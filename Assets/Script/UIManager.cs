@@ -1,0 +1,185 @@
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+
+public class UIManager : MonoBehaviour
+{
+    [Header("매니저 연결")]
+    [SerializeField] private PlantManager plantManager;  // ★ 플랜트 매니저 참조 (인스펙터 연결)
+    [SerializeField] private ZoneManager[] zones;
+
+    [Header("UI 버튼")]
+    [SerializeField] private Button runButton;
+    [SerializeField] private Button stopButton;
+    // [SerializeField] private Button pauseButton;
+    // [SerializeField] private Button eStopOnButton;
+    // [SerializeField] private Button eStopOffButton;
+    [SerializeField] private Button spawnOnceButton;
+    // [SerializeField] private Button clearFaultButton;
+    [SerializeField] private Button zoneRunButton;
+    [SerializeField] private Button zoneStopButton1;
+    [SerializeField] private Button zoneStopButton2;
+    [SerializeField] private Button zoneStopButton3;
+    [SerializeField] private Button zoneFaultButton;
+    [SerializeField] private Button zoneClearButton;
+    [SerializeField] private Sink zone3Sink;      // 존3 Sink drag
+    [SerializeField] private TMP_Text totalText;  // 전체 카운트 UI
+    [SerializeField] private TMP_Text ngText;     // NG 카운트 UI (있으면)
+    // [SerializeField] private Button resumeButton;
+
+    void Start()
+    {
+        if (plantManager == null)
+        Debug.LogError("[UIManager] PlantManager 미연결!");
+
+        if (zones == null)
+        Debug.LogError("[UIManager] ZoneManager 미연결!");
+
+        // --- 각 버튼에 PlantManager의 메서드 연결 ---
+        runButton.onClick.AddListener(OnRunClicked);
+        stopButton.onClick.AddListener(OnStopClicked);
+        zoneRunButton.onClick.AddListener(OnZoneRunClicked);
+        spawnOnceButton.onClick.AddListener(OnSpawnOnceClicked);
+        zoneStopButton1.onClick.AddListener(StopZone1);
+        zoneStopButton2.onClick.AddListener(StopZone2);
+        zoneStopButton3.onClick.AddListener(StopZone3);
+        zoneFaultButton.onClick.AddListener(ZoneFaultClicked);
+        zoneClearButton.onClick.AddListener(ZoneClearClicked);
+
+
+        // eStopOnButton.onClick.AddListener(OnEStopOnClicked);
+        // eStopOffButton.onClick.AddListener(OnEStopOffClicked);
+        // clearFaultButton.onClick.AddListener(OnClearFaultClicked);
+        // pauseButton.onClick.AddListener(OnPauseClicked);
+        // resumeButton.onClick.AddListener(OnResumeClicked);
+    }
+
+    private void OnEnable()
+    {
+        if (zone3Sink != null)
+            zone3Sink.OnCountChanged += HandleCountChanged;
+    }
+
+    private void OnDisable()
+    {
+        if (zone3Sink != null)
+            zone3Sink.OnCountChanged -= HandleCountChanged;
+    }
+
+    private void HandleCountChanged(int total, int ng)
+    {
+        if (totalText != null)
+            totalText.text = $"Total : {total}";
+
+        if (ngText != null)
+            ngText.text = $"NG : {ng}";
+    }
+
+    private void ZoneClearClicked()
+    {  
+        if (zones == null) return;
+
+        plantManager.ResetFault();
+        // var z = plantManager.GetLastFaultZone();
+        // if( z != null)  // 문제 발생한 존을 가져와서
+        // {
+        //     z.ClearFault();  // 클리어해줌 
+        // }
+    }
+
+
+    private void ZoneFaultClicked() 
+    {
+        int index = UnityEngine.Random.Range(0, zones.Length);
+
+        ZoneManager targetZone = zones[index];
+
+        Debug.Log($"강제 Fault 발생 -> Zone {targetZone.zoneId}");
+        
+        targetZone.RaiseFault();
+    }
+
+    private void OnRunClicked()  // 전원 on 스위치 Plant
+    {
+        plantManager.CmdRunAll();
+        Debug.Log("[Check] Plant State = " + plantManager.State);
+    }
+
+    private void OnStopClicked() // 전원 off 스위치 Plnat
+    {
+        plantManager.CmdStopAll();
+    }
+
+    private void StopZone1()
+    {
+        zones[0].ToggleUserStop();
+    }
+
+    private void StopZone2()
+    {
+        zones[1].ToggleUserStop();
+    }
+
+    private void StopZone3()
+    {
+        zones[2].ToggleUserStop();
+    }
+
+    // private void OnEStopOnClicked()
+    // {
+    //     plantManager.CmdEStopOn();
+    // }
+
+    // private void OnEStopOffClicked()
+    // {
+    //     plantManager.CmdEStopOff();
+    // }
+
+    private void OnZoneRunClicked()
+    {
+        foreach(var z in zones)
+        {
+            z.ZoneRun();
+        }
+    }
+
+    private void OnSpawnOnceClicked() // 아이템 스폰 버튼 (작동스위치가 On일때만)
+    {
+        if (plantManager == null)
+        {
+            Debug.Log("PlantManager가 할당되어 있지 않습니다.");
+            return;
+        }
+        if( plantManager.State != PlantState.Running)
+        {
+            Debug.Log("Run버튼을 눌러 전원을 켜주세요.");
+            return;
+        }
+        if(zones == null)
+        {
+            Debug.Log("zoneManager가 할당되어 있지 않습니다.");
+            return;
+        }
+
+        zones[0].ItemSpawn();
+        zones[1].ItemSpawn();
+        zones[2].ItemSpawn();
+    }
+
+    // private void OnPauseClicked()
+    // {
+    //     plantManager.CmdPause();
+    // }
+
+    // private void OnResumeClicked()
+    // {
+    //     plantManager.CmdResume();
+    // }
+
+    
+
+    // private void OnClearFaultClicked() // 문제 초기화
+    // {
+    //     plantManager.ClearFault(); 
+    // }
+}
