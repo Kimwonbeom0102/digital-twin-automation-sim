@@ -27,7 +27,7 @@ public class ItemPool : MonoBehaviour
     {
         if (poolQueue.Count == 0)
         {
-            GameObject goNew = Instantiate(itemPrefab, transform); // ★ 추가: 부족 시 추가 생성
+            GameObject goNew = Instantiate(itemPrefab, transform); // 추가: 부족 시 추가 생성
             goNew.SetActive(false);
             poolQueue.Enqueue(goNew.GetComponent<Item>());
         }
@@ -44,6 +44,7 @@ public class ItemPool : MonoBehaviour
     public void ReturnItem(Item item)
     {
         if (item == null) return;
+        item.transform.SetParent(null);
         item.gameObject.SetActive(false);   // 비활성
         poolQueue.Enqueue(item);            // 재고로 복귀
     }

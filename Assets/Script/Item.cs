@@ -26,6 +26,8 @@ public class Item : MonoBehaviour
 
     // (선택) 중복 판정 방지용 플래그
     public bool HasEvaluated { get; private set; } = false;
+    // public bool IsHeadingToPickUpSlot { get; private set; }
+    // private int targetBufferIndex = -1;
 
     
     void Update()
@@ -80,6 +82,28 @@ public class Item : MonoBehaviour
                 targetPosition = waypoints[currentWaypointIndex].position;
         }
     }
+
+    // public void SetHeadingToPickUpSlot(bool value)
+    // {
+    //     IsHeadingToPickUpSlot = value;
+    //     if (value) targetBufferIndex = -1;
+    // }
+
+    // public void SetHeadingToBufferSlot(int index)
+    // {
+    //     targetBufferIndex = index;
+    //     IsHeadingToPickUpSlot = false;
+    // }
+
+    // public bool IsHeadingToBufferSlot(int index)
+    // {
+    //     return targetBufferIndex == index;
+    // }
+
+    // public void ClearBufferTarget()
+    // {
+    //     targetBufferIndex = -1;
+    // }
 
     public void SetupRoute(Transform[] newRoute)
     {
@@ -187,11 +211,8 @@ public class Item : MonoBehaviour
         {
             targetPosition = waypoints[0].position;
         }
-
         // targetPosition = waypoints[0].position;
         // transform.position = targetPosition;
-
-
         isMoving = true;
         gameObject.SetActive(true);
     }
@@ -223,8 +244,8 @@ public class Item : MonoBehaviour
     // }
 
 
-    public void SetMoving(bool move) => isMoving = move;            // ★ 유지
-    public void SetMoveSpeed(float speed) => moveSpeed = speed;     // ★ 유지
+    // public void SetMoving(bool move) => isMoving = move;            // ★ 유지
+    // public void SetMoveSpeed(float speed) => moveSpeed = speed;     // ★ 유지
 
     /// <summary>
     /// 풀로 반환

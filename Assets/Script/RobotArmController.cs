@@ -1,6 +1,7 @@
 using UnityEngine;
 using System;
 using System.Collections;
+using TMPro;
 
 public enum RobotState
 {
@@ -32,21 +33,22 @@ public class RobotArmController : MonoBehaviour
     public float baseRotateSpeed = 10f;
     public Transform targetRot;
 
-    // ====== ARM ======
     [Header("---Chest---")]
     public Transform chest;
     public float chestRotateSpeed = 10f;
 
-    [Header("---Arm Joint---")]
+    [Header("---Arm---")]
     public Transform armJoint;  // 관절
     public float armRotateSpeed = 10f;
 
+    [Header("Reference")]
+    [SerializeField] private TextMeshProUGUI statusText;
+    [SerializeField] private string zoneLabel = "Z3";
 
     // [Header("---End Effctor---")]
     // public Transform effector;           // 필요 없으면 Inspector에서 비워둬도 됨
     // public float effectRotateSpeed = 2f; // 현재는 사용 안 함 (그립 회전만 사용)
 
-    // ====== GRIPPER ======
     [Header("---Gripper---")]
     public Transform leftHand;
     public Transform rightHand;
@@ -58,15 +60,19 @@ public class RobotArmController : MonoBehaviour
     // public Transform homePoint;  // 원점
     public Transform pickPoint;  // 존2의 싱크포인트
     public Transform dropPoint;  // 존3의 피더포인트
+    public PickUpSlot pickUpSlot;
 
     // ====== ITEM ====== 
     [Header("---Item---")]
-    public GameObject heldItem;  // 아이템 받아오기 
+    public Item heldItem;  // 아이템 받아오기 
     public Transform itemHoldPoint;
 
     [Header("=== Robot State ===")]
     public RobotState State { get; private set; } = RobotState.Idle;
-    private bool isBusy = false;
+    private bool isBusy;
+    public bool IsBusy => isBusy;
+
+    public event Action OnBecameIdle;
 
     // ====== MOTHODS ======
 
@@ -82,44 +88,145 @@ public class RobotArmController : MonoBehaviour
         baseIdleRot = baseRoot.localRotation; 
         chestIdleRot = chest.localRotation; 
         armIdleRot = armJoint.localRotation; 
+
+        if (statusText == null)
+        {
+            Debug.LogWarning("[RobotZoneStatusUI] statusText 미할당");
+        }
     }
 
     private void OnEnable()
     {
-        if(pickSink != null)
+        if(pickUpSlot != null)
         {
-            pickSink.OnItemArrivedForRobot += HandleItemArrived;
-            pickSink.OnQueueUpdated += TryProcessNextItem;  // 이벤트 구독 
-        } 
+            pickUpSlot.OnItemArrived += HandleItemArrive;
+            pickUpSlot.OnBecameEmpty += HandleSlotEmpty;
+        }
+        
+        // 존3 상태 변경 이벤트 구독
+        if(zone3Manager != null)
+        {
+            zone3Manager.OnStateChanged += OnZone3StateChanged;
+        }
     }
 
     private void OnDisable()
     {
-        if(pickSink != null)
+        if(pickUpSlot != null)
         {
-            pickSink.OnItemArrivedForRobot -= HandleItemArrived;
-            pickSink.OnQueueUpdated -= TryProcessNextItem;
-        }    
-    }
-
-    private void HandleItemArrived(Item item)  // 필드에서 받아오지 않음 
-    {
-        if(plant == null || plant.State != PlantState.Running) return;
-        if(item == null) return;
+            pickUpSlot.OnItemArrived -= HandleItemArrive;
+            pickUpSlot.OnBecameEmpty -= HandleSlotEmpty;
+        }
         
-        // StartPickAndPlace(item); Sink에서 Pick 관리
+        // 존3 상태 변경 이벤트 구독 해제
+        if(zone3Manager != null)
+        {
+            zone3Manager.OnStateChanged -= OnZone3StateChanged;
+        }
     }
+    
+    // public void TryPick()
+    // {
+    //     if (isBusy) return;
+    //     if (State != RobotState.Idle) return;
 
-    public void StartPickAndPlace(Item item)  // 필드에서 받아오지 않음 
+    //     if (zone3Manager == null || zone3Manager.State != ZoneState.Running) return;
+
+    //     Item item = pickUpSlot.Release();
+    //     if (item == null) return;
+
+    //     StartPickAndPlace(item);
+    // }
+
+    /// <summary>
+    /// 존3 상태 변경 시 호출
+    /// </summary>
+    private void OnZone3StateChanged(ZoneState newState)
     {
-        if(isBusy || item == null) return;
-
-        heldItem = item.gameObject;
-
-        StartCoroutine(PickAndPlaceRoutine(item));
+        Debug.Log($"[RobotArmController] 존3 상태 변경: {newState}");
+        
+        UpdateUI(newState);
+        // Stopped일 때는 현재 처리 중인 아이템만 완료하고 중단 (PickAndPlaceRoutine에서 처리)
     }
 
-    private IEnumerator PickAndPlaceRoutine(Item item)
+    private void UpdateUI(ZoneState state)
+    {
+        if (statusText == null) return;
+
+        switch (state)
+        {
+            case ZoneState.Running:
+                statusText.text = $"RUN ({zoneLabel})";
+                statusText.color = Color.green;
+                break;
+
+            case ZoneState.Stopped:
+            case ZoneState.Paused:
+                statusText.text = $"WAIT ({zoneLabel})";
+                statusText.color = Color.yellow;
+                break;
+
+            case ZoneState.Fault:
+                statusText.text = $"FAULT ({zoneLabel})";
+                statusText.color = Color.red;
+                break;
+
+            default:
+                statusText.text = $"UNKNOWN ({zoneLabel})";
+                statusText.color = Color.white;
+                break;
+        }
+    }
+
+    // private void HandleItemArrived(Item item)  
+    // {
+    //     if(item == null) 
+    //     {
+    //         Debug.LogWarning("[RobotArmController] 아이템이 null");
+    //         return;
+    //     }
+
+    //     if(plant == null || plant.State != PlantState.Running) 
+    //     {
+    //         Debug.Log("[RobotArmController] 플랜트가 Running이 아님");
+    //         return;
+    //     }
+        
+    //     if(zone3Manager == null || zone3Manager.State != ZoneState.Running) 
+    //     {
+    //         Debug.Log("[RobotArmController] 존3가 Running이 아님 -> 처리 안 함");
+    //         return;
+    //     }
+        
+    //     // 로봇이 Idle 상태이고 Busy가 아니면 처리 시작
+    //     if(State == RobotState.Idle)
+    //     {
+    //         StartPickAndPlace(item);
+    //     }
+    // }
+
+    private void HandleSlotEmpty()
+    {
+        Debug.Log("[Robot] PickUpSlot 비어짐");
+    }
+
+    private void HandleItemArrive(Item item)
+    {
+        TryStartWork();
+    }   
+
+
+    public void TryStartWork()
+    {
+        if (isBusy) return;
+        if (plant.State != PlantState.Running) return;
+        if (!pickUpSlot.HasItem) return;
+
+        StartCoroutine(PickAndPlaceRoutine());
+    }
+
+
+    private IEnumerator PickAndPlaceRoutine()
     {
         if(State != RobotState.Idle)
             yield break;
@@ -127,45 +234,97 @@ public class RobotArmController : MonoBehaviour
         State = RobotState.Running;
         isBusy = true;
 
+        heldItem = pickUpSlot.Release();
+        if (heldItem == null)
+        {
+            State = RobotState.Idle;
+            yield break;
+        }
+
+        // 처리 시작 전 존3 상태 재확인
+        if(zone3Manager == null || zone3Manager.State != ZoneState.Running)
+        {
+            Debug.Log("[RobotArmController] 처리 시작 전 존3 상태 확인 -> Stopped, 처리 중단");
+            
+            State = RobotState.Idle;
+            yield break;
+        }
+
         // 1. 픽업 포인트로 회전(베이스 + 관절만 제자리에서 회전)
         yield return StartCoroutine(RotateBaseTo(pickPoint));
         yield return StartCoroutine(RotateChestTo(pickPoint));
         yield return StartCoroutine(RotateArmTo(pickPoint));
-        // yield return RotateBaseToRoutine(pickPoint);
-        // yield return RotateArmToRoutine(pickPoint);
+
+        // 처리 중간에도 존3 상태 확인
+        if(zone3Manager == null || zone3Manager.State != ZoneState.Running)
+        {
+            Debug.Log("[RobotArmController] 픽업 중 존3 상태 변경 -> Stopped, 현재 아이템만 처리 후 중단");
+            // 현재 아이템은 처리 완료
+        }
 
         // 2. 그립 닫기 + 픽업
         CloseGrip();
         yield return new WaitForSeconds(0.2f);
         PickUpItem();
 
-        // State = RobotState.Running;
         // 3. 드랍 포인트로 회전(베이스 + 관절만 제자리에서 회전)
         yield return StartCoroutine(RotateBaseTo(dropPoint));
         yield return StartCoroutine(RotateArmTo(dropPoint));
+        
+        // 드롭 전 존3 상태 최종 확인
+        bool zone3WasRunning = (zone3Manager != null && zone3Manager.State == ZoneState.Running);
+        
         // 4. 그립 열기 + 드랍
         OpenGrip();
         yield return new WaitForSeconds(0.2f);
-        DropItem();
+        DropItem(zone3WasRunning);  // 존3 상태 전달
 
         yield return ReturnToIdle();
         
         isBusy = false;  // 작동 끝났으면 상태변경
         State = RobotState.Idle;
-        TryProcessNextItem();
-        // itemPool.ReturnItem(item);
+        
+        // 존3가 Running이면 다음 아이템 처리, 아니면 Idle 유지 -> 싱크기반에서 슬롯기반으로 변경 
+        // if(zone3Manager != null && zone3Manager.State == ZoneState.Running)
+        // {
+        //     TryProcessNextItem();
+        // }
 
+        OnBecameIdle?.Invoke();
     }
 
-    private void TryProcessNextItem()
-    {
-        if(State != RobotState.Idle) return;
-        if(!pickSink.HasItem()) return;
+    // private void TryProcessNextItem() 
+    // {
+    //     if(State != RobotState.Idle) 
+    //     {
+    //         Debug.Log("[RobotArmController] 로봇이 Idle 상태가 아님");
+    //         return;
+    //     }
+        
+    //     if(!pickUpSlot.HasItem()) 
+    //     {
+    //         Debug.Log("[RobotArmController] 큐에 아이템 없음");
+    //         return;
+    //     }
+        
+    //     // 존3 상태 확인
+    //     if(zone3Manager == null || zone3Manager.State != ZoneState.Running)
+    //     {
+    //         Debug.Log("[RobotArmController] 존3가 Running이 아님 -> 처리 안 함");
+    //         return;
+    //     }
 
-        Item next = pickSink.DequeueItem();
-        heldItem = next.gameObject;
-        StartCoroutine(PickAndPlaceRoutine(next));
-    }
+    //     Item next = pickSink.DequeueItem();
+    //     if(next == null)
+    //     {
+    //         Debug.LogWarning("[RobotArmController] 큐에서 가져온 아이템이 null");
+    //         return;
+    //     }
+
+    //     // StartCoroutine(PickAndPlaceRoutine(next));
+    //     StartPickAndPlace(next);
+        
+    // }
 
     private IEnumerator ReturnToIdle()
     {
@@ -273,10 +432,10 @@ public class RobotArmController : MonoBehaviour
                 yield break;
 
             Vector3 targetDir = localTarget.normalized;
-            if(targetDir.y < 0f)
-            {
-                targetDir.y = targetDir.y;
-            }
+            // if(targetDir.y < 0f)
+            // {
+            //     targetDir.y = targetDir.y;
+            // }
             targetDir.Normalize();
 
             Vector3 currentDir = Vector3.down;
@@ -301,7 +460,6 @@ public class RobotArmController : MonoBehaviour
                 yield break;
 
             yield return null;
-
         }
     }
     
@@ -458,8 +616,7 @@ public class RobotArmController : MonoBehaviour
         rightPos.x = gripCLoseX;
 
         leftHand.localPosition = leftPos;
-        rightHand.localPosition = rightPos;
-        
+        rightHand.localPosition = rightPos;   
     }
 
     public void PickUpItem()
@@ -467,11 +624,11 @@ public class RobotArmController : MonoBehaviour
         // 싱크 포지션 지점 맞고
         // 아이템 != null 아니면 
         // 아이템은 pickuppoint로 이동(부모의 자식으로 옮겨줌)
-        if(heldItem == null || itemHoldPoint == null) return;
+        if (heldItem == null || itemHoldPoint == null) return;
+        if (pickUpSlot == null) return;
 
         Transform itemTr = heldItem.transform;
         itemTr.SetParent(itemHoldPoint);
-        Debug.Log($"{itemHoldPoint} 아이템 픽업");
 
         itemTr.localPosition = Vector3.zero;
         itemTr.localRotation = Quaternion.identity;
@@ -483,11 +640,11 @@ public class RobotArmController : MonoBehaviour
             rb.isKinematic = true;
             rb.useGravity = false;
         }
+        Debug.Log($"{itemHoldPoint} 아이템 픽업");
     }
 
-    public void DropItem()
+    public void DropItem(bool zone3IsRunning = true)
     {
-
         // 피더 포인트 지점이 맞고
         // // 아이템 != Null 아니면
         // 아이템은 존3 싱크 포인트로 이동
@@ -505,7 +662,29 @@ public class RobotArmController : MonoBehaviour
         }
 
         Transform t = heldItem.transform;
+        Item itemComp = heldItem.GetComponent<Item>();
 
+        // 존3 상태 확인
+        bool zone3Running = (zone3Manager != null && zone3Manager.State == ZoneState.Running);
+        
+        if(!zone3Running || !zone3IsRunning)
+        {
+            // 존3가 Stopped면 아이템을 비활성화하고 큐에 저장 (또는 별도 저장 공간)
+            Debug.Log("[DropItem] 존3가 Stopped -> 아이템 비활성화 및 큐 저장");
+            
+            // 아이템 비활성화
+            t.SetParent(null);
+            t.gameObject.SetActive(false);
+            
+            // 필요시 별도 큐에 저장하거나, 존3 재가동 시 처리할 수 있도록 관리
+            // 현재는 비활성화만 하고, 나중에 존3 재가동 시 다시 활성화할 수 있도록 설계
+            // (추가 구현 필요: 존3 전용 큐 또는 저장소)
+            
+            heldItem = null;
+            return;
+        }
+
+        // 존3가 Running이면 정상 드롭
         // 1. 드롭 위치 배치
         t.SetParent(null);  // 풀어주고 드롭포인트에 넣어줘야함 
         t.position = dropPoint.position;
@@ -519,24 +698,23 @@ public class RobotArmController : MonoBehaviour
             rb.useGravity = false;
         }
 
-        Item itemComp = heldItem.GetComponent<Item>();
         if (itemComp != null)
         {
-            if(zone3Manager != null)
+            if(zone3Manager != null && zone3Manager.route != null && zone3Manager.route.Length > 0)
             {
                  itemComp.SetupRoute(zone3Manager.route);
             }
             else
             {
-                Debug.LogWarning("[DropItem] zone3Manager is Null");
+                Debug.LogWarning("[DropItem] zone3Manager 또는 route가 Null");
+                // route가 없어도 OnDropped는 호출 (아이템이 이미 경로를 가지고 있을 수 있음)
             }
            
             itemComp.OnDropped(1);  // ★★ 여기만 호출하면 됨
+            Debug.Log("[DropItem] 아이템 정상 드롭 완료");
         }
 
-
         heldItem = null;
-        
     }
 
 

@@ -19,6 +19,8 @@ public enum PlantState
 public class PlantManager : MonoBehaviour
 {
     [SerializeField] private ZoneManager[] zones;
+    [SerializeField] private Sink zone3Sink;
+    private int faultCount = 0;
 
     [Header("Global Control")]
     [SerializeField] private float globalSpeed = 1.0f;
@@ -29,7 +31,7 @@ public class PlantManager : MonoBehaviour
     
     public bool IsGateOpen =>
         State == PlantState.Running;
-        
+
     private Coroutine stopChainCo;
     public bool HasActiveFault {get; private set;} = false;  // 고장 플래그 
     public bool isEstopActive {get; private set;} = false; // 비상정지 플래그 
@@ -67,6 +69,9 @@ public class PlantManager : MonoBehaviour
         if(!faultZones.Contains(faultZone))
         {
             faultZones.Add(faultZone);  // 문제발생 존 등록 
+            faultCount++;
+
+            AccumulatedStatsManager.Instance.AddFault();
             Debug.Log($"[Plant] Fault 등록됨 -> Zone {faultZone.zoneId}, 총 Fault 수 : {faultZones.Count}");
         }
         Debug.Log($"[Plant] Zone {faultZone.zoneId} Fault 감지");
@@ -79,7 +84,6 @@ public class PlantManager : MonoBehaviour
         // 3번 존에서 Fault 나면 2 -> 1 순서로 정지 
         if (faultZone.zoneId == 3)
         {
-            // ✅ 단순 버전:
             // 이미 순차 정지 코루틴이 돌고 있으면(중복 방지), 새로 시작하지 않음.
             if (stopChainCo == null)
             {
@@ -96,6 +100,12 @@ public class PlantManager : MonoBehaviour
         ZoneManager last = faultZones[faultZones.Count -1];  // 문제발생 존을 담아주고
         last.ClearFault();  // 문제 해결 이때의 플랜트랑 존의 상태를 확인해야함 
         faultZones.Remove(last);  // 문제 해결하고나서 모두 비워줌 
+
+        DataLogger.Instance.LogEvent(
+            "ZoneFaultCleared",
+            $"Zone{last.zoneId}",
+            "Fault 해제"
+        );
     }
     
     public void ResetAllFaults()
@@ -107,12 +117,6 @@ public class PlantManager : MonoBehaviour
 
         faultZones.Clear(); // 리스트 초기화
     }
-
-    
-    // public ZoneManager GetLastFaultZone() 
-    // {
-    //     return lastFaultZone;
-    // }
 
     public void SetGlobalSpeed(float value) // 글로벌스피드 수정하는 메서드 
     {
@@ -170,6 +174,15 @@ public class PlantManager : MonoBehaviour
         return null;
     }
     
+    public ZoneManager GetPrevZone(ZoneManager current) // 현재 존 상태
+    {
+        for (int i = 0; i < zones.Length - 1; i++)  // 배열만큼 반복해서 
+        {
+            if (zones[i + 1] == current)  // 현재 존 카운트를 더해서 현재 존을 반환 
+                return zones[i];
+        }
+        return null;
+    }
 
     /// <summary>
     /// 현재 플랜트 상태에서 아이템을 흘려보내도 되는지 판정
@@ -219,7 +232,8 @@ public class PlantManager : MonoBehaviour
         // 안전 제약 : 비상/고장 중에는 운전 금지
         if (isEstopActive) return;
         if (HasActiveFault) return;
-
+        
+        DataLogger.Instance.StartSession();
     }
 
     // public void CmdPause() // 일시정지
@@ -253,6 +267,33 @@ public class PlantManager : MonoBehaviour
         // 비상 중에는 Stop 의미없음(이미 Estop 상태))
         // if (!isEstopActive)  // 비상정지 플래그가 꺼져있으면 
         //     SetState(PlantState.Stopped);  // 멈춤상태로 전환 
+
+        AccumulatedStatsManager.Instance.SaveStats();
+        EndPlantRun();
+        // {
+        //     sessionId = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss"),
+        //     startTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+        //     endTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+        //     duration = DateTime.Now.Subtract(startTime).TotalSeconds,
+        //     totalItems = 0,
+        //     totalErrors = 0
+        // };
+
+        // DataLogger.Instance.LogEvent("PlantStop", "Plant", "Plant stopped");
+    }
+
+    public void EndPlantRun()
+    {
+        SummaryData summary = new SummaryData
+        {
+            total = zone3Sink.TotalCount,
+            ok = zone3Sink.OkCount,
+            ng = zone3Sink.NgCount,
+            faultCount = faultCount,
+            endTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+        };
+
+        DataLogger.Instance.EndSession(summary);
     }
 
     // public void CmdResume() // 재개, 다시시작
