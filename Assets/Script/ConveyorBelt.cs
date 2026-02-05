@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class ConveyorBelt : MonoBehaviour
 {
-    [SerializeField] private float scrollSpeed = 0.5f;
+    [SerializeField] private float beltSpeed = 0.5f;
 
     private Renderer beltRenderer;
     private Material beltMat;
@@ -12,13 +12,12 @@ public class ConveyorBelt : MonoBehaviour
     {
         beltRenderer = GetComponent<Renderer>();
 
-        // ★ 중요: sharedMaterial ❌ / material ⭕
         beltMat = beltRenderer.material;
     }
 
     void Update()
     {
-        offset.x -= scrollSpeed * Time.deltaTime;
+        offset.x -= beltSpeed * Time.deltaTime;
         beltMat.SetTextureOffset("_BaseMap", offset);
     }
 }

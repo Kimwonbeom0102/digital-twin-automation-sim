@@ -1,30 +1,37 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System;
+using System.Collections.Generic;
 
 public class UIManager : MonoBehaviour
 {
     [Header("매니저 연결")]
     [SerializeField] private PlantManager plantManager;  // ★ 플랜트 매니저 참조 (인스펙터 연결)
     [SerializeField] private ZoneManager[] zones;
+    [SerializeField] private StorageRack storageRack;
+    [SerializeField] private NgRack ngRack;
 
     [Header("UI 버튼")]
-    [SerializeField] private Button runButton;
+    [SerializeField] private Button runButton;  // 
     [SerializeField] private Button stopButton;
     // [SerializeField] private Button pauseButton;
     // [SerializeField] private Button eStopOnButton;
     // [SerializeField] private Button eStopOffButton;
-    [SerializeField] private Button spawnOnceButton;
+    [SerializeField] private Button spawnOnceButton;  // 스폰 
     // [SerializeField] private Button clearFaultButton;
-    [SerializeField] private Button zoneRunButton;
-    [SerializeField] private Button zoneStopButton1;
+    [SerializeField] private Button zoneRunButton;  // 존 준비
+    [SerializeField] private Button zoneStopButton1;  // 존1 스톱
     [SerializeField] private Button zoneStopButton2;
     [SerializeField] private Button zoneStopButton3;
-    [SerializeField] private Button zoneFaultButton;
-    [SerializeField] private Button zoneClearButton;
+    [SerializeField] private Button zoneFaultButton;  // 존 폴트 발생
+    [SerializeField] private Button zoneClearButton;  // 존 폴트 초기화
+    [SerializeField] private Button okResetButton;
+    [SerializeField] private Button ngResetButton;
     [SerializeField] private Sink zone3Sink;      // 존3 Sink drag
     [SerializeField] private TMP_Text totalText;  // 전체 카운트 UI
     [SerializeField] private TMP_Text ngText;     // NG 카운트 UI (있으면)
+    [SerializeField] private TMP_Text okText;     // Ok 카운트 UI (있으면)
     // [SerializeField] private Button resumeButton;
 
     void Start()
@@ -45,7 +52,8 @@ public class UIManager : MonoBehaviour
         zoneStopButton3.onClick.AddListener(StopZone3);
         zoneFaultButton.onClick.AddListener(ZoneFaultClicked);
         zoneClearButton.onClick.AddListener(ZoneClearClicked);
-
+        okResetButton.onClick.AddListener(OkResetClicked);
+        ngResetButton.onClick.AddListener(NgResetClicked);
 
         // eStopOnButton.onClick.AddListener(OnEStopOnClicked);
         // eStopOffButton.onClick.AddListener(OnEStopOffClicked);
@@ -66,13 +74,16 @@ public class UIManager : MonoBehaviour
             zone3Sink.OnCountChanged -= HandleCountChanged;
     }
 
-    private void HandleCountChanged(int total, int ng)
+    private void HandleCountChanged(int total, int ng, int ok)
     {
         if (totalText != null)
             totalText.text = $"Total : {total}";
 
         if (ngText != null)
             ngText.text = $"NG : {ng}";
+        
+        if (okText != null)
+            okText.text = $"OK : {ok}";
     }
 
     private void ZoneClearClicked()
@@ -87,6 +98,27 @@ public class UIManager : MonoBehaviour
         // }
     }
 
+    private void OkResetClicked()
+    {
+        if (storageRack == null)
+        {
+            Debug.LogWarning("[UIManager] StorageRack 미연결");
+            return;
+        }
+
+        storageRack.ClearOk();
+    }
+
+    private void NgResetClicked()
+    {
+        if (ngRack == null)
+        {
+            Debug.LogWarning("[UIManager] NgRack 미연결");
+            return;
+        }
+        
+        ngRack.ClearNg();  
+    }
 
     private void ZoneFaultClicked() 
     {
@@ -135,7 +167,7 @@ public class UIManager : MonoBehaviour
     //     plantManager.CmdEStopOff();
     // }
 
-    private void OnZoneRunClicked()
+    private void OnZoneRunClicked()  
     {
         foreach(var z in zones)
         {

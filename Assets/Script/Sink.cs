@@ -1,8 +1,7 @@
 using UnityEngine;
-using System.Collections;
 using System;
+using System.Collections;
 using System.Collections.Generic;
-
 
 public enum ZoneType
 {
@@ -11,157 +10,190 @@ public enum ZoneType
     Zone3
 }
 
+public enum SinkRole
+{
+    Zone1,
+    Zone2_Buffer,
+    Zone3
+}
+
 /// <summary>
-/// 아이템 회수 지점 컨트롤하는 객체     
-/// /// </summary>
+/// Sink
+/// - 아이템 회수 지점
+/// - 큐 스택 관리
+/// - 로봇은 이벤트로만 연결
+/// </summary>
 public class Sink : MonoBehaviour
 {
+    [Header("Sink Info")]
     public ZoneType zoneType;
-    public bool holdForRobot = false;
-    [SerializeField] public Item currentItem;
-    
-    [SerializeField] private ItemPool itemPool;     // ★ 추가: 회수할 풀
-    [SerializeField] private int totalCount = 0;    // ★ 추가: 누적 카운트(옵션)
 
+    [Header("Sink Role")]
+    [SerializeField] private SinkRole role;
+    [SerializeField] private BufferZone bufferZone;
+    [SerializeField] private StorageRack storageRack;
+    [SerializeField] private NgRack ngRack;
+
+    // 더 이상 로봇시퀀스에 관여하지않음
+    // [Header("Flags")] 
+    // public bool holdForRobot = false;   // Zone2에서 로봇 공정 대상 여부 
+
+    [Header("References")]
+    [SerializeField] private ItemPool itemPool;   // Zone3 전용 풀
+
+    // ===== Queue =====
     private Queue<Item> itemQueue = new Queue<Item>();
-    private int ngCount = 0;
-
-    [SerializeField, Range(0f, 1f)] private float ngThreshold = 0.1f; // 임시 NG 확률(예시) 인스펙터에서 설정 
-
-    public event Action<Sink> OnSink;
-    public event Action<Item> OnItemArrivedForRobot;
-    public event Action OnQueueUpdated;
-
     private bool isProcessing = false;
 
-    public event Action<int, int> OnCountChanged;
+    // ===== Count (Zone3) =====
+    [SerializeField] private int totalCount = 0;
+    private int okCount = 0;
+    private int ngCount = 0;
+    private float ngThreshold = 0.1f;
 
-    // 필요하면 외부에서 읽을 수 있게 프로퍼티도 제공
+    // ===== Events =====
+    public event Action<Sink, Item> OnSink;          // ZoneManager 구독
+    public event Action OnQueueUpdated;               // Robot / ZoneManager
+    // public event Action<Item> OnItemArrivedForRobot;  // Robot 전용
+    public event Action<int, int, int> OnCountChanged;     // UI
+
+    public int QueueCount => itemQueue.Count;
     public int TotalCount => totalCount;
     public int NgCount => ngCount;
+    public int OkCount => okCount; 
 
-    // public bool isSinkPassed = false;
+    // ===============================
+    // Queue API (유일한 Enqueue 경로)
+    // ===============================
+    public void EnqueueItem(Item item)
+    {
+        if (item == null) return;
 
-    // public void OnItemArrived(Item item)
-    // {
-    //     itemQueue.Enqueue(item);
-    //     OnQueueUpdated?.Invoke();
-    // }
+        item.gameObject.SetActive(false);
+        itemQueue.Enqueue(item);
+        OnQueueUpdated?.Invoke();
+
+        
+        Debug.Log($"[Sink-{zoneType}] Enqueue : {item.itemName}, Count={itemQueue.Count}");
+    }
 
     public bool HasItem()
     {
         return itemQueue.Count > 0;
     }
+
     public Item DequeueItem()
     {
+        if (itemQueue.Count == 0) return null;
         return itemQueue.Dequeue();
     }
 
-    /// <summary>
-    /// 싱크에 충돌시 
-    /// 업데이트에서 1번 호출 (아이템이 할당되어있고 싱크에 닿으면 풀로 보내고)
-    /// (아이템이 비어있으면 풀로 보내지않고 종료한다.)
-    /// <summary>
-    private void OnTriggerEnter(Collider other)  
+    // ===============================
+    // Trigger
+    // ===============================
+    private void OnTriggerEnter(Collider other)
     {
+        if (isProcessing) return;
+
         Item item = other.GetComponent<Item>();
-        if(item == null) return;
-        
-        if(isProcessing) return;
+        if (item == null) return;
+        // item.EvaluateQuality(threshold);
+        // if (item.IsNG) Debug.Log("[Sink] 불량품 감지!");
+
         isProcessing = true;
-
-        Debug.Log("[Sink Trigger Enter] " + other.name + " at " + Time.frameCount);
-
-        // itemQueue.Enqueue(item);
-        // Debug.Log($"[Sink] Queue Count = {itemQueue.Count}");
-        // OnQueueUpdated?.Invoke();  // 누가 등록? -> 머신이 구독해서 큐에 스택이 쌓인지 체크
         
-        // GetComponent<Item>() 은 Unity에서
-        // “이 GameObject에 Item 컴포넌트가 붙어있다면 그걸 반환하고,
-        // 없다면 null을 반환한다.”
-        
-        // 아이템인지 확인(충돌체의 GameObject에 Item 컴포넌트가 있는가?)
-        if (item == null)
-        {
-            // 아이템이 아니면 무시
-            Debug.Log("[Sink] Item 컴포넌트가 아닌 충돌체입니다.");
-            return;
-        }
-            
-        // Debug.Log($"[Sink] {zoneType} 아이템 존재함");
+        Debug.Log($"[Sink-{zoneType}] Trigger Enter : {item.name}");
 
-        // 회수 직전 품질 판정(데모: 확률 기반). 중복 판정을 막고 싶으면 Item.HasEvaluated로 가드
-        item.EvaluateQuality(ngThreshold);
-        if (item.IsNG) Debug.Log("[Sink] 불량품 감지!");
-        
+        // ===========================
+        // Zone3 : 최종 회수
+        // ===========================
         if (zoneType == ZoneType.Zone3)
         {
-            totalCount++;                   // ★ 추가: 카운팅 (풀로 반환할때만 카운트가 됨)
-            if(item.IsNG) 
-                ngCount++;
-            
-            Debug.Log($"[Sink3] 생산 카운트 증가 → Total:{totalCount}, NG:{ngCount}");
-            Debug.Log($"[Sink3] 회수: {item.itemName}, NG:{item.IsNG} (누적:{totalCount})");
+            item.EvaluateQuality(ngThreshold);
 
-            OnCountChanged?.Invoke(totalCount, ngCount);
-            itemPool.ReturnItem(item);
-        }
-        else if(zoneType == ZoneType.Zone1)    
-        {
-            Debug.Log($"[Sink1] Zone {zoneType} -> 일반존이면 회수, 로봇존이면 로봇 처리");
-            itemPool.ReturnItem(item);
-        }
-
-        if(holdForRobot)
-        {
-            itemQueue.Enqueue(item);
-            Debug.Log($"[Sink2] Queue Count = {itemQueue.Count}");
-            OnQueueUpdated?.Invoke();  // 누가 등록? -> 머신이 구독해서 큐에 스택이 쌓인지 체크
-
-            Debug.Log($"[Sink2] Zone {zoneType} -> 로봇 픽업용 싱크, 카운트/회수 X");
-            currentItem = item;
-
-            var rb = item.GetComponent<Rigidbody>();
-            if(rb != null)
+            totalCount++;
+            if (item.IsNG)
             {
-                rb.linearVelocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;
-                rb.isKinematic = true;
+                ngCount++;
+                // itemPool.ReturnItem(item);
+                ngRack.StoreNg(item);
+
+                AccumulatedStatsManager.Instance.AddNG();
+                DataLogger.Instance.LogInspectionResult("Zone3", true);
+            } 
+            else
+            {
+                okCount++;
+                storageRack.Store(item);
+
+                AccumulatedStatsManager.Instance.AddOK();
+                DataLogger.Instance.LogInspectionResult("Zone3", false);
+
             }
+            Debug.Log($"[Sink3] 검사 완료 → {item.itemName} " + $"Total={totalCount}, OK={okCount}, NG={ngCount}");
 
-            item.transform.position = transform.position;
-            item.transform.rotation = transform.rotation;
-
-            OnItemArrivedForRobot?.Invoke(item);  // 로봇에게 이벤트 넘겨줌. 아이템이 작업대상임
             
+            OnCountChanged?.Invoke(totalCount, ngCount, okCount);
+
             StartCoroutine(ResetFlag());
             return;
         }
-
-        // 회수 (혹은 임시 비활성화)
-        // if(itemPool != null && zoneType != ZoneType.Zone2)
-        // {
-        //     itemPool.ReturnItem(item);
-        // }
-        // if (itemPool != null) // Sink에 itemPool 인스턴스 연결되어있음? 
-            // itemPool.ReturnItem(item);      // ★ 추가: 풀로 반환 (풀로 보내버림) 풀에 있는 메서드를 활용  
-        // else // Sink가 풀을 모르면 (인스펙터 연결 안되어있으면) 아이템 그냥 꺼버림
-        //     item.gameObject.SetActive(false);
         
+        if (zoneType == ZoneType.Zone1)
+        {
+            EnqueueItem(item);
+            // item.gameObject.SetActive(false);
+            Debug.Log($"[Sink-{zoneType}] 인큐 + 비활성화");
+        }
 
+        // ===========================
+        // Zone2 + 로봇 대상
+        // ===========================
 
-        OnSink?.Invoke(this);
+        switch (role)
+        {
+            case SinkRole.Zone2_Buffer:
+                bufferZone.Enqueue(item);
+                break;
+        }
 
+        // if (zoneType == ZoneType.Zone2)  // 로봇트리거를 비활성화해서 픽업슬롯으로 로봇시퀀스 작동
+        // {
+        //     // EnqueueItem(item);
+
+        //     if (holdForRobot)
+        //     {
+        //         Debug.Log("[Sink-Zone2] 로봇 공정 대상 → 이벤트 전달");
+
+        //         // FreezeItem(item);
+        //         // OnQueueUpdated?.Invoke();
+
+        //         OnItemArrivedForRobot?.Invoke(item);
+        //     }
+        // }
+
+        OnSink?.Invoke(this, item);
         StartCoroutine(ResetFlag());
-
-        // item.gameObject.SetActive(false);
+        
     }
-    
+
+    private void FreezeItem(Item item)
+    {
+        if (item == null) return;
+
+        item.isMoving = false;
+        
+        Rigidbody rb = item.GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.isKinematic = true;
+            rb.useGravity = false;
+        }
+    }
 
     private IEnumerator ResetFlag()
     {
         yield return new WaitForSeconds(0.05f);
-
         isProcessing = false;
     }
 }
