@@ -8,8 +8,6 @@ public class PickUpSlot : MonoBehaviour
 
     public event Action OnBecameEmpty;
     public event Action<Item> OnItemArrived; // 슬롯에 실제로 도착했을 때(트리거 기반)
-    [SerializeField] private RobotArmController robot;
-
 
     public bool HasItem  // 슬롯상태 확인
     {
@@ -62,6 +60,14 @@ public class PickUpSlot : MonoBehaviour
 
         item.transform.position = transform.position;
         item.transform.rotation = transform.rotation;
+    }
+
+    public void ForceCheck()
+    {
+        if (currentItem != null)
+        {
+            OnItemArrived?.Invoke(currentItem);
+        }
     }
 
 

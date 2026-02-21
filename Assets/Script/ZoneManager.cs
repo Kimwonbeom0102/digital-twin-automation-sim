@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections;
 using System;
+using TMPro;
 
 public enum ZoneRole
 {
@@ -13,8 +14,9 @@ public enum ZoneState
 {
     Stopped,    // 정지
     Running,    // 작동
-    Paused,     // 일시정지
-    Fault,      // 문제발생
+    Warning,    // 약한 fualt 
+    // Paused,    
+    Fault      // 강한 fault, 바로 정지
     // Estop       // 비상정지, 나중을 위한 예비책
 }
 
@@ -25,11 +27,11 @@ public class ZoneManager : MonoBehaviour
     [Header("Feeder Settings")]
     public int zoneId;          // 1,2,3
     public string zoneName;
-    [SerializeField] private float firstFeedInterval = 5f; // 존1 피더에서 생성되는 주기 
+    [SerializeField] private float spawnInterval = 5f; // 존1 피더에서 생성되는 주기 
     [SerializeField] private float transferDelay = 4f;  // 싱크에 들어갔다가 피더에서 다시 생성되는 주기
+    [SerializeField] private float faultProbability = 0.05f;
     [SerializeField] private Sensor[] sensors;
 
-    public ZoneRole Role;
     public RobotArmController robot;
 
     [Header("References")]
@@ -44,7 +46,12 @@ public class ZoneManager : MonoBehaviour
     [SerializeField] private BufferZone bufferZone;
     [SerializeField] private PickUpSlot pickUpSlot;
 
+    public ZoneRole Role;
     [SerializeField] private ZoneManager zone3Manager;
+    [SerializeField] private ZoneState currentState;
+
+    [Header("UI")]
+    [SerializeField] private TMP_Text zoneNameText;
 
 
     // [Header("Zone2 Pickup/Buffer")]
@@ -56,6 +63,8 @@ public class ZoneManager : MonoBehaviour
     // private bool pickUpSlotReserved = false;
     public bool canSpawn = true;
     public bool isUserStopped = false;
+    private bool isFeedingSlot;
+    private bool canReceiveFromSink = true;
 
     public ZoneState State { get; private set; } = ZoneState.Stopped;
     public bool HasActiveFault {get; private set;} = false;  // 고장 플래그 
@@ -68,7 +77,7 @@ public class ZoneManager : MonoBehaviour
     public event Action<ZoneState> OnStateChanged;
     
     public bool CanRun => 
-        plant != null && State == ZoneState.Stopped && !HasActiveFault;
+        plant != null && State == ZoneState.Stopped && !HasActiveFault && plant.GetCanFeed();
 
     // 코루틴 제어
     public bool feederOn {get; private set;} = false; // 실행 플래그  
@@ -77,6 +86,16 @@ public class ZoneManager : MonoBehaviour
     private bool isProcessingQueue = false; // ProcessQueueItems 실행 중 플래그
     private Item pendingItem; 
 
+    public int QueueCount
+    {
+        get
+        {
+            if (sink == null)
+                return 0;
+
+            return sink.QueueCount;
+        }
+    }
     // [SerializeField] private bool error; // 확장용(나중에 센서/머신 연결)
 
     // 코루틴 제어
@@ -106,19 +125,47 @@ public class ZoneManager : MonoBehaviour
             Debug.LogWarning($"[Zone] {zoneId} Sink 없음");
         }
 
+        State = ZoneState.Stopped;
+        UpdateZoneUI();
+        
         if (Role != ZoneRole.Conveyor)  return;
 
-        bufferZone.OnQueueChanged += TryFeedPickUpSlot;
+        bufferZone.OnQueueChanged += HandleQueueChanged;
         pickUpSlot.OnBecameEmpty += TryFeedPickUpSlot;
         robot.OnBecameIdle += TryFeedPickUpSlot;
 
+    }
+
+    public void SetSpawnInterval(float value)
+    {
+        spawnInterval = value;
+    }
+
+    public void SetFaultProbability(float value)
+    {
+        faultProbability = value;
+    }
+
+    private void HandleQueueChanged(int count)
+    {
+        TryFeedPickUpSlot();
+    }
+
+    // 전이 메서드 - 추후에 통일
+    private void Setstate(ZoneState s)
+    {
+        if (State == s) return;
+        State = s;
+
+        // UpdateZoneUI(); // 추후 추가예정
+        OnStateChanged?.Invoke(State);
     }
  
     private void TryStartSinkDequeue()  // Zone2에만 해당 
     {
         if (Role != ZoneRole.Conveyor) return;
-        if (State != ZoneState.Running) return;
-        if (sink == null) return;
+        // if (State != ZoneState.Running) return;
+        if (!canReceiveFromSink) return;
         if (isProcessingQueue) return;
 
         isProcessingQueue = true;
@@ -152,16 +199,27 @@ public class ZoneManager : MonoBehaviour
 
     public void TryFeedPickUpSlot()
     {
-        if (Role != ZoneRole.Conveyor)  return;
+        if (isFeedingSlot) return;
+        if (Role != ZoneRole.Conveyor) return;
         if (plant.State != PlantState.Running) return;
+        if (State != ZoneState.Running) return;
+
         if (robot.IsBusy) return;
         if (pickUpSlot.HasItem) return;
         if (!bufferZone.HasItem) return;
         if (zone3Manager.State != ZoneState.Running) return;
 
+        isFeedingSlot = true;
         var item = bufferZone.Dequeue();
+        if (item == null) 
+        {
+            isFeedingSlot = false;
+            return;
+        }
+
         pickUpSlot.AssignPickUpSlot(item);
         robot.TryStartWork();
+        isFeedingSlot = false;
     }
 
     public void HandleSinkPass(Sink sink, Item item)
@@ -259,7 +317,7 @@ public class ZoneManager : MonoBehaviour
         if (Role != ZoneRole.Conveyor)
             return;
 
-        bufferZone.OnQueueChanged -= TryFeedPickUpSlot;
+        bufferZone.OnQueueChanged -= HandleQueueChanged;
         pickUpSlot.OnBecameEmpty -= TryFeedPickUpSlot;
         robot.OnBecameIdle -= TryFeedPickUpSlot;
 
@@ -289,9 +347,21 @@ public class ZoneManager : MonoBehaviour
 
         if (onNoPass.sensorId >= 0)
         {
-            RaiseFault();
+            SetWarning();
         }
     }
+
+    public void SetWarning()
+    {
+        if (State != ZoneState.Running)
+            return;
+
+        State = ZoneState.Warning;
+        OnStateChanged?.Invoke(State);
+
+        Debug.Log($"[Zone {zoneId}] Warning 발생");
+    }
+
 
     public void ToggleUserStop() 
     {
@@ -311,22 +381,52 @@ public class ZoneManager : MonoBehaviour
         }
     }
 
-    public void PauseZone()
+    public void ForceClearFault()
     {
-        if (State == ZoneState.Paused) return;
+        if (State == ZoneState.Fault)
+            return; // 아직 Fault면 건드리지 않음
 
-        Debug.Log($"[Zone {zoneId}] Paused");
-        State = ZoneState.Paused;
-        // 신규 스폰만 막음
-        StopFeeder();
+        // Plant가 Running이면 Running 복구
+        if (plant != null && plant.State == PlantState.Running)
+            State = ZoneState.Running;
+        else
+            State = ZoneState.Stopped;
+
+        OnStateChanged?.Invoke(State);
     }
+
+    private IEnumerator ResumeConveyorRoutine()
+    {
+        yield return null; // 한 프레임 안정화
+
+        TryFeedPickUpSlot();  // 슬롯 우선 채우기
+
+        yield return null;
+
+        if (sink != null && sink.HasItem() && !isProcessingQueue)
+        {
+            TryStartSinkDequeue();  // 그 다음 Sink 처리
+        }
+    }
+
+
+    // public void PauseZone()
+    // {
+    //     if (State == ZoneState.Paused) return;
+
+    //     Debug.Log($"[Zone {zoneId}] Paused");
+    //     State = ZoneState.Paused;
+    //     // 신규 스폰만 막음
+    //     StopFeeder();
+    // }
 
     public void ClearFault()
     {
-        // if(State != ZoneState.Fault) return;
+        if(State != ZoneState.Fault) return;
 
         HasActiveFault = false; // 문제 해결 
         State = ZoneState.Stopped; // 멈춤상태 
+        UpdateZoneUI();
         Debug.Log($"[Zone] {zoneId} Fault 제거! -> {State}"); 
         // StartFeeder(); 
         OnStateChanged?.Invoke(State);
@@ -340,6 +440,7 @@ public class ZoneManager : MonoBehaviour
 
         HasActiveFault = true;
         State = ZoneState.Fault;
+        UpdateZoneUI();
         OnZoneFault?.Invoke(this);     // 존매니저의 문제발생 메서드 넘겨줌 
         OnStateChanged?.Invoke(State);
         StopFeeder();
@@ -348,10 +449,65 @@ public class ZoneManager : MonoBehaviour
 
         DataLogger.Instance.LogEvent("ZoneFault", zoneName, "Fault 발생");
     }
+    
+    public void ReturnToRunning()
+    {
+        if (State != ZoneState.Warning)
+            return;
+
+        State = ZoneState.Running;
+        OnStateChanged?.Invoke(State);
+
+        Debug.Log($"[Zone {zoneId}] Running 복귀");
+    }
+
+    // public void ResumeZone()
+    // {
+    //     // Stopped 상태에서만 재개 허용
+    //     if (State != ZoneState.Stopped)
+    //     {
+    //         Debug.LogWarning($"[Zone {zoneId}] ResumeZone 호출 시 상태가 Stopped가 아님 -> {State}");
+    //         return;
+    //     }
+
+    //     if (HasActiveFault || isEstopActive)
+    //     {
+    //         Debug.LogWarning($"[Zone {zoneId}] Fault/EStop 상태에서는 Resume 불가");
+    //         return;
+    //     }
+
+    //     Debug.Log($"[Zone {zoneId}] Resume 요청");
+
+    //     // 재개 시 기본 목표 상태는 Running
+    //     State = ZoneState.Running;
+    //     UpdateZoneUI();
+
+    //     OnStateChanged?.Invoke(State);
+
+    //     if (Role == ZoneRole.Feeder)
+    //     {
+    //         StartFeeder();
+    //     }
+
+    //     if (Role == ZoneRole.Conveyor)
+    //         StartCoroutine(ResumeConveyorRoutine());
+
+    //     // 1) 싱크 큐에 아이템이 있다면 우선 순차적으로 비워준다.
+    //     // if (sink != null && sink.HasItem())
+    //     // {
+    //     //     if (!isProcessingQueue)
+    //     //     {
+    //     //         Debug.Log($"[Zone {zoneId}] 싱크 큐에 {sink.QueueCount}개 존재 -> 큐 우선 처리 시작");
+    //     //         TryStartSinkDequeue();
+    //     //     }
+    //     // }
+    
+        
+    //     DataLogger.Instance.LogEvent("ZoneResume", zoneName, "Zone resumed");
+    // }
 
     public void ResumeZone()
     {
-        // Stopped 상태에서만 재개 허용
         if (State != ZoneState.Stopped)
         {
             Debug.LogWarning($"[Zone {zoneId}] ResumeZone 호출 시 상태가 Stopped가 아님 -> {State}");
@@ -366,24 +522,33 @@ public class ZoneManager : MonoBehaviour
 
         Debug.Log($"[Zone {zoneId}] Resume 요청");
 
-        // 재개 시 기본 목표 상태는 Running
-        State = ZoneState.Running;
-        OnStateChanged?.Invoke(State);
-
-        // 1) 싱크 큐에 아이템이 있다면 우선 순차적으로 비워준다.
-        if (sink != null && sink.HasItem())
+        switch (Role)
         {
-            if (!isProcessingQueue)
-            {
-                Debug.Log($"[Zone {zoneId}] 싱크 큐에 {sink.QueueCount}개 존재 -> 큐 우선 처리 시작");
+            case ZoneRole.Feeder:
+                State = ZoneState.Running;
+                UpdateZoneUI();
+                OnStateChanged?.Invoke(State);
+                StartFeeder();
+                break;
+
+            case ZoneRole.Conveyor:
+                // 입력 다시 허용
+                canReceiveFromSink = true;
+
+                State = ZoneState.Running;
+                UpdateZoneUI();
+                OnStateChanged?.Invoke(State);
+
+                // 🔥 재동기화 (중요)
                 TryStartSinkDequeue();
-            }
-        }
+                TryFeedPickUpSlot();
+                break;
 
-        // 2) 이 존이 Feeder 역할이면, 재개와 동시에 피더도 다시 켜준다.
-        if (Role == ZoneRole.Feeder)
-        {
-            StartFeeder();
+            case ZoneRole.Output:
+                State = ZoneState.Running;
+                UpdateZoneUI();
+                OnStateChanged?.Invoke(State);
+                break;
         }
 
         DataLogger.Instance.LogEvent("ZoneResume", zoneName, "Zone resumed");
@@ -393,6 +558,8 @@ public class ZoneManager : MonoBehaviour
     public void ZoneRun()
     {
         if (!CanRun) return;
+
+        if (!plant.GetCanFeed()) return;
 
         if (plant == null)
         {
@@ -409,6 +576,7 @@ public class ZoneManager : MonoBehaviour
         ZoneState oldState = State;
         State = ZoneState.Running;
 
+        UpdateZoneUI();
         if (oldState != State)
             OnStateChanged?.Invoke(State);
 
@@ -420,6 +588,7 @@ public class ZoneManager : MonoBehaviour
         // TryStartSinkDequeue();
     }
 
+    
     // private void TryStartQueueProcess()
     // {
     //     // 이미 큐 처리 중이면 중복 시작 금지
@@ -523,11 +692,12 @@ public class ZoneManager : MonoBehaviour
             if (State == ZoneState.Stopped || State == ZoneState.Fault)
                 break;
 
-            if (State == ZoneState.Paused)
-            {
-                yield return null;
-                continue;
-            }
+            //현재 Paused 진입점 없음 
+            // if (State == ZoneState.Paused)
+            // {
+            //     yield return null;
+            //     continue;
+            // }
 
             // 다음 존 상태 확인 (nextZone이 null이면 마지막 존이므로 큐 처리 계속)
             if(nextZone != null)
@@ -604,6 +774,7 @@ public class ZoneManager : MonoBehaviour
 
         ZoneState oldState = State;
         State = ZoneState.Stopped;
+        UpdateZoneUI();
         StopFeeder();
         
         // 상태 변경 이벤트 발생
@@ -615,25 +786,54 @@ public class ZoneManager : MonoBehaviour
 
     public void ZoneStop()  // 특정 존만 정지
     {
+        // if (State == ZoneState.Stopped) return;
+        
+        // ZoneState oldState = State;
+        
+        // if (Role == ZoneRole.Feeder || Role == ZoneRole.Conveyor)  // 존 1,2일때만 정지
+        // {
+        //     State = ZoneState.Stopped;
+        //     UpdateZoneUI();
+        //     StopFeeder();
+        // }
+        // else // 존3
+        // {
+        //     State = ZoneState.Stopped;
+        //     UpdateZoneUI();
+        // }
+
+        // // 상태 변경 이벤트 발생
+        // if(oldState != State)
+        // {
+        //     OnStateChanged?.Invoke(State);
+        // }
+
         if (State == ZoneState.Stopped) return;
-        
+
         ZoneState oldState = State;
-        
-        if (Role == ZoneRole.Feeder || Role == ZoneRole.Conveyor)  // 존 1,2일때만 정지
+
+        switch (Role)
         {
-            State = ZoneState.Stopped;
-            StopFeeder();
-        }
-        else // 존3
-        {
-            State = ZoneState.Stopped;
+            case ZoneRole.Feeder:
+                StopFeeder();
+                State = ZoneState.Stopped;
+                break;
+
+            case ZoneRole.Conveyor:
+                // 입력만 차단
+                canReceiveFromSink = false;
+                State = ZoneState.Stopped;   // UI 표시용
+                break;
+
+            case ZoneRole.Output:
+                State = ZoneState.Stopped;
+                break;
         }
 
-        // 상태 변경 이벤트 발생
-        if(oldState != State)
-        {
+        UpdateZoneUI();
+
+        if (oldState != State)
             OnStateChanged?.Invoke(State);
-        }
 
         DataLogger.Instance.LogEvent("ZoneStop", zoneName, "Zone stopped");
     }
@@ -675,7 +875,7 @@ public class ZoneManager : MonoBehaviour
             if(GetCanFeed()) // 작동중일때 피드 가능하면 스폰
             {
                 Spawn(); // 생성 메서드 실행 
-                yield return new WaitForSeconds(firstFeedInterval); // 쉬고
+                yield return new WaitForSeconds(spawnInterval); // 쉬고
             }
             else  // 아니면 기다림
             {
@@ -745,6 +945,35 @@ public class ZoneManager : MonoBehaviour
         item.Init(itemPool, route, speed, "Box", UnityEngine.Random.Range(1, 999), this); // Init에서 활성화
     }
 
+    private void UpdateZoneUI()
+    {
+        zoneNameText.text = GetZoneLabel();
+        zoneNameText.color = GetColorByState();
+    }
+
+    private string GetZoneLabel()
+    {
+        return $"Zone {zoneId} : {State}";
+    }   
+
+
+    private Color GetColorByState()
+    {
+        switch (State)
+        {
+            case ZoneState.Running:
+                return Color.green;
+            case ZoneState.Warning:
+                return Color.yellow;
+            case ZoneState.Stopped:
+                return Color.yellow;
+            case ZoneState.Fault:
+                return Color.red;
+            default:
+                return Color.white;
+        }
+    }
+
     // public void SpawnOnce()
     // {
     //     if(Role == ZoneRole.Conveyor)
@@ -765,7 +994,7 @@ public class ZoneManager : MonoBehaviour
 
         return plant.GetSpeedScale();
     }
-    
+
     void Update()  // 존마다 스폰을 업데이트가 아닌 이벤트로 유지하는게 better.
     {
         

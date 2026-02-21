@@ -1,6 +1,7 @@
 using System.IO;
 using UnityEngine;
 using System;
+using System.Collections.Generic;
 
 public class DataLogger : MonoBehaviour
 {
@@ -9,6 +10,7 @@ public class DataLogger : MonoBehaviour
     private string logFolderPath;
 
     private SessionData currentSession;
+    
 
     void Awake()
     {
@@ -97,5 +99,37 @@ public class DataLogger : MonoBehaviour
 
         File.WriteAllText(path, json);
         Debug.Log($"[DataLogger] Saved: {path}");
+    }
+
+    public void SaveSanpShot(PlantManager plant)
+    {
+        Debug.Log("[Snapshot saved]");
+
+        PlantSnapshot snapshot = new PlantSnapshot();
+
+        snapshot.time = DateTime.Now.ToString("HH:mm:ss");
+        snapshot.plantState = plant.State;
+
+        snapshot.zones = new List<ZoneSanpshot>();
+
+        foreach (var z in plant.Zones)
+        {
+            Debug.Log($"Zone(z.zoneId) : {z.State}");
+            ZoneSanpshot zs = new ZoneSanpshot();
+            zs.zoneId = z.zoneId;
+
+            zs.state = z.State;
+            zs.queueCount = z.QueueCount; // 없으면 0
+
+            snapshot.zones.Add(zs);
+        }
+
+        snapshot.total = plant.zone3Sink.TotalCount;
+        snapshot.ok = plant.zone3Sink.OkCount;
+        snapshot.ng = plant.zone3Sink.NgCount;
+
+        string json = JsonUtility.ToJson(snapshot, true);
+
+        Debug.Log("[Snapshot]\n" + json);
     }
 }

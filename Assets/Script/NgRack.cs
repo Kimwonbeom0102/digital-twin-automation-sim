@@ -5,6 +5,9 @@ using System.Collections.Generic;
 public class NgRack : MonoBehaviour
 {
     [SerializeField] private List<Transform> slots = new List<Transform>();
+    public event Action<int, string> OnNgUpdated;
+    [SerializeField] private int ngCount = 0;
+    private string lastNgTime = "-";
     public int currentIndex = 0;
     [SerializeField] private ItemPool itemPool;
 
@@ -38,6 +41,11 @@ public class NgRack : MonoBehaviour
         
 
         currentIndex++;
+
+        ngCount++;
+        lastNgTime = DateTime.Now.ToString("HH:mm:ss");
+
+        OnNgUpdated?.Invoke(ngCount, lastNgTime);
 
         Debug.Log($"[StoreNg] 아이템 적재 완료 ({currentIndex}/{slots.Count})");
 
@@ -80,8 +88,18 @@ public class NgRack : MonoBehaviour
         }
 
         currentIndex = 0;
+
+        if (ngCount != 0)
+        {
+            ngCount = 0;
+            lastNgTime = DateTime.Now.ToString("HH:mm:ss");
+
+            OnNgUpdated?.Invoke(ngCount, lastNgTime);
+
+        }
         Debug.Log("[StoreNg] 초기화 완료");
     }
 
+  
    
 }

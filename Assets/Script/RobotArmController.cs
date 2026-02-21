@@ -43,7 +43,8 @@ public class RobotArmController : MonoBehaviour
 
     [Header("Reference")]
     [SerializeField] private TextMeshProUGUI statusText;
-    [SerializeField] private string zoneLabel = "Z3";
+    // [SerializeField] private string zoneLabel = "Z3";
+    [SerializeField] private TextMeshProUGUI robotBusyText;
 
     // [Header("---End Effctor---")]
     // public Transform effector;           // 필요 없으면 Inspector에서 비워둬도 됨
@@ -73,6 +74,8 @@ public class RobotArmController : MonoBehaviour
     public bool IsBusy => isBusy;
 
     public event Action OnBecameIdle;
+    public event Action<RobotState> OnRobotStateChanged;
+
 
     // ====== MOTHODS ======
 
@@ -145,38 +148,48 @@ public class RobotArmController : MonoBehaviour
     {
         Debug.Log($"[RobotArmController] 존3 상태 변경: {newState}");
         
-        UpdateUI(newState);
-        // Stopped일 때는 현재 처리 중인 아이템만 완료하고 중단 (PickAndPlaceRoutine에서 처리)
-    }
-
-    private void UpdateUI(ZoneState state)
-    {
-        if (statusText == null) return;
-
-        switch (state)
+        if (newState == ZoneState.Running)
         {
-            case ZoneState.Running:
-                statusText.text = $"RUN ({zoneLabel})";
-                statusText.color = Color.green;
-                break;
-
-            case ZoneState.Stopped:
-            case ZoneState.Paused:
-                statusText.text = $"WAIT ({zoneLabel})";
-                statusText.color = Color.yellow;
-                break;
-
-            case ZoneState.Fault:
-                statusText.text = $"FAULT ({zoneLabel})";
-                statusText.color = Color.red;
-                break;
-
-            default:
-                statusText.text = $"UNKNOWN ({zoneLabel})";
-                statusText.color = Color.white;
-                break;
+            TryStartWork();   // 재개 시 동작 시도
         }
+        
+        // Stopped일 때는 현재 처리 중인 아이템만 완료하고 중단 (PickAndPlaceRoutine에서 처리)
+        
     }
+
+    // private void UpdateUI(ZoneState state)
+    // {
+    //     if (statusText == null) return;
+
+    //     switch (state)
+    //     {
+    //         case ZoneState.Running:
+    //             statusText.text = "State : Running";
+    //             statusText.color = Color.green;
+    //             robotBusyText.text = "Busy : True";
+    //             break;
+
+            
+    //         // case ZoneState.Paused:
+    //         case ZoneState.Stopped:
+    //             statusText.text = "State : Stopped";
+    //             statusText.color = Color.yellow;
+    //             robotBusyText.text = "Busy : False";
+    //             break;
+
+    //         case ZoneState.Fault:
+    //             statusText.text = "State : Fault";
+    //             statusText.color = Color.red;
+    //             robotBusyText.text = "Busy : False";
+    //             break;
+
+    //         default:
+    //             statusText.text = "State : Default";
+    //             statusText.color = Color.white;
+    //             robotBusyText.text = "Busy : False";
+    //             break;
+    //     }
+    // }
 
     // private void HandleItemArrived(Item item)  
     // {
@@ -218,10 +231,29 @@ public class RobotArmController : MonoBehaviour
 
     public void TryStartWork()
     {
-        if (isBusy) return;
-        if (plant.State != PlantState.Running) return;
-        if (!pickUpSlot.HasItem) return;
+        Debug.Log($"[Robot] TryStartWork 호출");
 
+        if (isBusy)
+        {
+            Debug.Log("[Robot] isBusy 막힘");
+            return;
+        }   
+        
+        if (plant.State != PlantState.Running)
+        {
+            Debug.Log("[Robot] plant Running 아님");
+            return;
+        }
+        if (zone3Manager.State != ZoneState.Running)
+            return;
+        if (!pickUpSlot.HasItem)
+        {
+            Debug.Log("[Robot] pickUpSlot 비어있음");
+            return;
+        } 
+        if (State != RobotState.Idle) return;
+
+        Debug.Log("[Robot] 코루틴 시작");
         StartCoroutine(PickAndPlaceRoutine());
     }
 
@@ -232,12 +264,14 @@ public class RobotArmController : MonoBehaviour
             yield break;
 
         State = RobotState.Running;
+        OnRobotStateChanged?.Invoke(State);
         isBusy = true;
 
         heldItem = pickUpSlot.Release();
         if (heldItem == null)
         {
             State = RobotState.Idle;
+            OnRobotStateChanged?.Invoke(State);
             yield break;
         }
 
@@ -246,6 +280,7 @@ public class RobotArmController : MonoBehaviour
         {
             Debug.Log("[RobotArmController] 처리 시작 전 존3 상태 확인 -> Stopped, 처리 중단");
             
+            isBusy = false;
             State = RobotState.Idle;
             yield break;
         }
@@ -283,6 +318,7 @@ public class RobotArmController : MonoBehaviour
         
         isBusy = false;  // 작동 끝났으면 상태변경
         State = RobotState.Idle;
+        OnRobotStateChanged?.Invoke(State);
         
         // 존3가 Running이면 다음 아이템 처리, 아니면 Idle 유지 -> 싱크기반에서 슬롯기반으로 변경 
         // if(zone3Manager != null && zone3Manager.State == ZoneState.Running)
@@ -291,6 +327,8 @@ public class RobotArmController : MonoBehaviour
         // }
 
         OnBecameIdle?.Invoke();
+
+        TryStartWork();
     }
 
     // private void TryProcessNextItem() 

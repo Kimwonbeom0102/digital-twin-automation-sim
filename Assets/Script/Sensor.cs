@@ -9,6 +9,14 @@ public class Sensor : MonoBehaviour
     public int sensorId;          // 센서 번호
     public int zoneId;         // 선택 사항
 
+    [SerializeField] private Renderer indicatorRenderer;
+
+    [SerializeField] private Color idleColor = Color.gray;
+    [SerializeField] private Color passColor = Color.green;
+    [SerializeField] private Color warningColor = Color.yellow;
+    [SerializeField] private Color faultColor = Color.red;
+
+
     // 시간 관리
     public float timeoutSec = 5.0f;       // T초 동안 PASS가 없으면 경고
     public float checkInterval = 1.0f;  // 확인 주기(초)
@@ -44,16 +52,36 @@ public class Sensor : MonoBehaviour
 
     }
 
+    private void SetIndicatorColor(Color color)
+    {
+        if (indicatorRenderer == null) return;
+        indicatorRenderer.material.color = color;
+    }
+
     void OnTriggerEnter(Collider other)
     {
         // 아이템만 인정
         if (!other.CompareTag(itemTag)) return;
 
         lastPassTime = Time.time;
+
+        if (zone.State == ZoneState.Warning)
+            zone.ReturnToRunning();
+            
         Debug.Log($"[Sensor#{sensorId}] Item 지나감!");
+
+        SetIndicatorColor(passColor);
+
+        StartCoroutine(ReturnToIdle());
     }
 
-    IEnumerator CheckNoPass()
+    private IEnumerator ReturnToIdle()
+    {
+        yield return new WaitForSeconds(0.2f);
+        SetIndicatorColor(idleColor);
+    }
+
+    private IEnumerator CheckNoPass()
     {
         yield return new WaitForSeconds(2f);
         faultCheckEnabled = true;
@@ -61,6 +89,12 @@ public class Sensor : MonoBehaviour
         var wait = new WaitForSeconds(checkInterval);
         while (true)
         {
+
+            if (!faultCheckEnabled)
+            {
+                yield return null;
+                continue;
+            }
 
             if(zone.State != ZoneState.Running)
             {
@@ -72,6 +106,7 @@ public class Sensor : MonoBehaviour
             if (Time.time - lastPassTime > timeoutSec)
             {
                 Debug.LogWarning($"[Sensor#{sensorId}] 안 지나감(Timeout)");
+                SetIndicatorColor(warningColor);
 
                 OnNoPass?.Invoke(this);                 // 매니저가 구독하여 처리
                 lastPassTime = Time.time;               // 같은 경고 연속 발행 방지

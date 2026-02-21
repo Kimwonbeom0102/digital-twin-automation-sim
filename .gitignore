@@ -1,3 +1,6 @@
+
+
+
 # ========================
 # Unity generated folders
 # ========================
@@ -45,4 +48,19 @@ sysinfo.txt
 /Library/com.unity.addressables/
 /Library/com.unity.scriptablebuildpipeline/
 
+# ========================
+# Ignore heavy asset packs
+# ========================
+Assets/BrokenVector/
+Assets/UnityFactorySceneHDRP/
+Assets/Samples/
+Assets/XR/
+Assets/XRI/
+Assets/_Recovery/
 
+# ========================
+# Ignore lightmap data
+# ========================
+Assets/Scenes/SampleScene/Lightmap-*
+Assets/Scenes/SampleScene/ReflectionProbe-*
+Assets/Scenes/SampleScene/LightingData.asset
