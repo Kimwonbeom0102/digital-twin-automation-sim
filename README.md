@@ -1,6 +1,6 @@
 # Automation Simulation (Unity)
 
-## 📌 프로젝트 개요
+##  프로젝트 개요
 
 Unity 기반으로 설계한 **상태(State) 중심 공정 제어 시뮬레이션 프로젝트**입니다.
 
@@ -10,7 +10,7 @@ Unity 기반으로 설계한 **상태(State) 중심 공정 제어 시뮬레이�
 
 ---
 
-## 🎯 핵심 설계 목표
+##  핵심 설계 목표
 
 - 상태 기반 제어 아키텍처 설계
 - Stop / Resume / Fault 전파 흐름 모델링
@@ -20,9 +20,9 @@ Unity 기반으로 설계한 **상태(State) 중심 공정 제어 시뮬레이�
 
 ---
 
-## 🏗 아키텍처 구조
+##  아키텍처 구조
 
-### 🔹 State Layer
+###  State Layer
 - PlantState
 - ZoneState
 - RobotState
@@ -32,7 +32,7 @@ Unity 기반으로 설계한 **상태(State) 중심 공정 제어 시뮬레이�
 
 ---
 
-### 🔹 Event-Driven Flow
+###  Event-Driven Flow
 
 - Item 감지 → Robot 작업 트리거
 - Fault 발생 → Spawn 제어 중단
@@ -42,7 +42,7 @@ Unity 기반으로 설계한 **상태(State) 중심 공정 제어 시뮬레이�
 
 ---
 
-### 🔹 Buffer & Queue
+###  Buffer & Queue
 
 - Max Capacity 제한
 - Overflow 시 +N 시각화
@@ -50,14 +50,14 @@ Unity 기반으로 설계한 **상태(State) 중심 공정 제어 시뮬레이�
 
 ---
 
-## 🔧 XR 확장 구조
+##  XR 확장 구조
 
 Core Simulation Logic은 유지하고  
 입력/카메라 레이어만 XR 모드로 분리했습니다.
 
 ---
 
-## 🛠 기술 스택
+##  기술 스택
 
 - Unity 6
 - C#
