@@ -19,7 +19,7 @@ public enum PlantState
 public class PlantManager : MonoBehaviour
 {
     [SerializeField] private ZoneManager[] zones;
-    [SerializeField] private Sink zone3Sink;
+    public Sink zone3Sink;
     private int faultCount = 0;
 
     [Header("Global Control")]
@@ -33,13 +33,18 @@ public class PlantManager : MonoBehaviour
         State == PlantState.Running;
 
     private Coroutine stopChainCo;
-    public bool HasActiveFault {get; private set;} = false;  // 고장 플래그 
+    // public bool HasActiveFault {get; private set;} = false;  // 고장 플래그 
+    public bool HasActiveFault => faultZones.Count > 0;
     public bool isEstopActive {get; private set;} = false; // 비상정지 플래그 
 
     // private ZoneManager lastFaultZone;
     public List<ZoneManager> faultZones = new List<ZoneManager>();
+    // public event Action<PlantManager> OnPlantRun;
+    // public event Action<PlantManager> OnPlantStop;
+    public event Action<PlantState> OnPlantStateChanged;
+    public IReadOnlyList<ZoneManager> Zones => zones;
+    public event Action<int> OnFaultCount;
 
-    
     // 코루틴 제어
     // public bool feederOn {get; private set;} = false; // 실행 플래그  
     // private Coroutine feederCo; // 코루틴 핸들 
@@ -65,7 +70,6 @@ public class PlantManager : MonoBehaviour
     /// </summary>
     private void HandleZoneFault(ZoneManager faultZone)  
     {
-
         if(!faultZones.Contains(faultZone))
         {
             faultZones.Add(faultZone);  // 문제발생 존 등록 
@@ -73,6 +77,8 @@ public class PlantManager : MonoBehaviour
 
             AccumulatedStatsManager.Instance.AddFault();
             Debug.Log($"[Plant] Fault 등록됨 -> Zone {faultZone.zoneId}, 총 Fault 수 : {faultZones.Count}");
+            OnFaultCount?.Invoke(faultCount);
+
         }
         Debug.Log($"[Plant] Zone {faultZone.zoneId} Fault 감지");
 
@@ -82,15 +88,15 @@ public class PlantManager : MonoBehaviour
         // 이후에 fault가 발생한 zone을 리스트로 저장
 
         // 3번 존에서 Fault 나면 2 -> 1 순서로 정지 
-        if (faultZone.zoneId == 3)
-        {
+        
             // 이미 순차 정지 코루틴이 돌고 있으면(중복 방지), 새로 시작하지 않음.
-            if (stopChainCo == null)
+        if (stopChainCo == null)
             {
-                stopChainCo = StartCoroutine(StopChainFromTopDown());
+                stopChainCo = StartCoroutine(StopChainFromTopDown(faultZone.zoneId));
             }
-        }
-
+    
+        DataLogger.Instance.SaveSanpShot(this);
+        
     }
 
     public void ResetFault()
@@ -100,6 +106,11 @@ public class PlantManager : MonoBehaviour
         ZoneManager last = faultZones[faultZones.Count -1];  // 문제발생 존을 담아주고
         last.ClearFault();  // 문제 해결 이때의 플랜트랑 존의 상태를 확인해야함 
         faultZones.Remove(last);  // 문제 해결하고나서 모두 비워줌 
+
+        foreach (var z in zones)
+        {
+            z.ForceClearFault();
+        }
 
         DataLogger.Instance.LogEvent(
             "ZoneFaultCleared",
@@ -129,34 +140,43 @@ public class PlantManager : MonoBehaviour
     {
         if (State == s) return; // 동일한 상태면 종료
         State = s;
+
+        OnPlantStateChanged?.Invoke(State);
         // 여기서 ui/알람/로그/애니메이터 등에 알림을 줄 수 있음 (이벤트/콜백 구조로 확장 가능)
         // Debug.Log("[Plant] State -> " + State);
     }
-
-    
 
     /// <summary>
     /// 3번 Fault 시 2 → 1 순차 정지 시퀀스.
     /// 한 번 시작되면 끝까지(2,1 모두 Stop) 수행하고 마지막에 stopChainCo를 null로 리셋
     /// </summary>
-    private IEnumerator StopChainFromTopDown()
+    private IEnumerator StopChainFromTopDown(int startZoneId)
     {
-        ZoneManager zone2 = GetZoneById(2);
-
-        if (zone2 != null)
+        for (int i = startZoneId - 1; i >= 1; i--)
         {
-            yield return new WaitForSeconds(2f);
-            zone2.ZoneStop();
-        }
+            ZoneManager z = GetZoneById(i);
 
-        ZoneManager zone1 = GetZoneById(1);
-        if (zone1 != null)
-        {
-            yield return new WaitForSeconds(2f);
-            zone1.ZoneStop();
+            if (z != null)
+            {
+                yield return new WaitForSeconds(5f);
+                if (!HasActiveFault)
+                {
+                    stopChainCo = null;
+                    yield break;
+                }
+                z.ZoneStop();
+            }
         }
-
+        
         stopChainCo = null;   // 시퀀스 다 끝난 뒤에만 null로 초기화
+
+        // ZoneManager zone1 = GetZoneById(1);
+        // if (zone1 != null)
+        // {
+        //     yield return new WaitForSeconds(2f);
+        //     zone1.ZoneStop();
+        // }
+        
     }
 
     /// <summary>
@@ -170,7 +190,6 @@ public class PlantManager : MonoBehaviour
             if(z != null && z.zoneId == id)
                 return z;
         }
-
         return null;
     }
     
@@ -220,19 +239,22 @@ public class PlantManager : MonoBehaviour
     public void CmdRunAll()   // 작동 시작 명령  
     {
         if (State == PlantState.Running) return;
-
-        State = PlantState.Running;
-        // foreach (var z in zones) // 여기서 활성화시키지않고 따로 권한부여
-        // {
-        //     if(z != null)
-        //         z.Run();
-        // }
-             
-
-        // 안전 제약 : 비상/고장 중에는 운전 금지
-        if (isEstopActive) return;
-        if (HasActiveFault) return;
         
+        // 안전 제약 : 비상/고장 중에는 운전 금지
+        if (isEstopActive) 
+        {   
+            Debug.Log("[Plant] Estop active - Run 불가");
+            return;
+        }
+
+        if (HasActiveFault)
+        {
+            Debug.Log("[Plant] Fault 존재 - Run 불가");
+            return;
+        } 
+        
+        SetState(PlantState.Running);
+
         DataLogger.Instance.StartSession();
     }
 
@@ -250,7 +272,7 @@ public class PlantManager : MonoBehaviour
     {
         if(State == PlantState.Stopped) return;
 
-        State = PlantState.Stopped;
+        SetState(PlantState.Stopped);
 
         foreach(var z in zones)
         {
@@ -292,7 +314,6 @@ public class PlantManager : MonoBehaviour
             faultCount = faultCount,
             endTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
         };
-
         DataLogger.Instance.EndSession(summary);
     }
 

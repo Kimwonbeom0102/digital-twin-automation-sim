@@ -17,9 +17,9 @@ public class StatusBoard : MonoBehaviour
     public Renderer lampBlue;
 
     [Header("Material/Emission")]
-    public bool   useEmission      = true;
+    public bool   useEmission      = false;
     public string emissionProperty = "_EmissionColor"; // 파이프라인에 맞게 필요시 수정
-    public Color  colRed    = new(1f, 0.2f, 0.1f);
+    public Color  colRed    = new(0.8f, 0f, 0f);
     public Color  colYellow = new(1f, 0.8f, 0.1f);
     public Color  colBlue   = new(0.2f, 0.6f, 1f);
     public float  intensity = 10f;
@@ -68,24 +68,26 @@ public class StatusBoard : MonoBehaviour
         var p = plant ? plant.State : PlantState.Stopped; // enum이 Stop이면 여기만 Stop으로
         var z = zone  ? zone.State  : ZoneState.Stopped;
 
+        if (z == ZoneState.Fault)
+            return(Lamp.Red, BlinkMode.Slow);
         // 1) 플랜트 우선(게이트): 파랑(Running)일 때만 존 세부 표시
         // 1) 플랜트 보드일 경우: 상태 그대로 표시 (Zone 로직으로 가지 않음)
         if (level == BoardLevel.Plant)
         {
             switch (p)
             {
-                case PlantState.EStop:   return (Lamp.Red,    BlinkMode.Fast);
+                // case PlantState.EStop:   return (Lamp.Red,    BlinkMode.Fast);
                 case PlantState.Fault:   return (Lamp.Red,    BlinkMode.None);
                 case PlantState.Stopped: return (Lamp.Yellow, BlinkMode.None);
-                case PlantState.Running: return (Lamp.Blue,   BlinkMode.None); // ★ 파란불!
+                case PlantState.Running: return (Lamp.Blue,   BlinkMode.None);
             }
         }
 
         // 2) 플랜트가 Running일 때의 존 상태 매핑
         switch (z)
         {
-            case ZoneState.Fault:   return (Lamp.Red,    BlinkMode.None);
-            case ZoneState.Paused:  return (Lamp.Yellow, BlinkMode.Slow);
+            case ZoneState.Fault:   return (Lamp.Red,    BlinkMode.Slow);
+            case ZoneState.Warning: return (Lamp.Yellow, BlinkMode.Slow);
             case ZoneState.Stopped: return (Lamp.Yellow, BlinkMode.None);
             case ZoneState.Running: return (Lamp.Blue,   BlinkMode.None);
             default:                return (Lamp.Yellow, BlinkMode.None);
@@ -115,7 +117,10 @@ public class StatusBoard : MonoBehaviour
         if (on != _blinkOn)
         {
             _blinkOn = on;
-            SetLamp(_currLamp, _blinkOn);
+
+            SetAllOff();
+            if(_blinkOn)
+                SetLamp(_currLamp, _blinkOn);
         }
     }
 
@@ -144,7 +149,7 @@ public class StatusBoard : MonoBehaviour
         if (useEmission)
         {
             mat.EnableKeyword("_EMISSION");
-            mat.SetColor(emissionProperty, on ? c * intensity : Color.black);
+            mat.SetColor(emissionProperty, on ? c * intensity * 0.5f : Color.black);
         }
         else
         {

@@ -3,28 +3,38 @@ using System;
 using System.Collections.Generic;
 using TMPro;
 
+public enum BufferState
+{
+    Empty,  // 0개
+    Processing,  // 1개 (슬롯)
+    Backlog,  // 2개이상 (인큐로보냄)
+    Blocked   // 인큐도 맥스일 때
+}
+
 public class BufferZone : MonoBehaviour
 {
     // [SerializeField] private BufferSlot[] slots; // 0 = 로봇에 가장 가까움
     private Queue<Item> queue = new Queue<Item>();
-    public event Action OnQueueChanged;
+    public event Action<int> OnQueueChanged;
+    public event Action<BufferState> OnBufferStateChanged;
     
+    private BufferState currentState;
     [SerializeField] private List<BufferSlot> slots;
-    [SerializeField] private GameObject overflowIndicator;
-    [SerializeField] private TMP_Text overflowText;
+    [SerializeField] private int maxCapacity = 10;
 
-
-    private void Awake()
-    {
-        if (overflowIndicator != null)
-            overflowIndicator.SetActive(false);
-    }
+    
 
     public void Enqueue(Item item)
     {
+        if (queue.Count >= maxCapacity)
+        {
+            UpdateBufferState(queue.Count);
+            return;
+        }
+
         queue.Enqueue(item);
         UpdateVisuals();
-        OnQueueChanged?.Invoke();
+        OnQueueChanged?.Invoke(queue.Count);
     }
 
     public Item Dequeue()
@@ -34,6 +44,7 @@ public class BufferZone : MonoBehaviour
 
         var item = queue.Dequeue();
         UpdateVisuals();
+        OnQueueChanged?.Invoke(queue.Count);
         return item;
     }
 
@@ -43,34 +54,45 @@ public class BufferZone : MonoBehaviour
     {
         Item[] items = queue.ToArray();
 
-        // 1️⃣ 모든 슬롯 비우기 (핵심)
+        // 1️⃣ 슬롯 비우기
         for (int i = 0; i < slots.Count; i++)
         {
             slots[i].Clear();
         }
 
-        // 2️⃣ 큐 순서대로 다시 채우기
-        int visibleCount = Mathf.Min(items.Length, slots.Count);
-
-        for (int i = 0; i < visibleCount; i++)
+        // 2️⃣ 첫 번째 아이템만 표시 (슬롯 1개)
+        if (items.Length > 0)
         {
-            Item item = items[i];
-
+            Item item = items[0];
             item.gameObject.SetActive(true);
-            slots[i].Snap(items[i]);
+            slots[0].Snap(item);
         }
 
-        for (int i = visibleCount; i < items.Length; i++)
+        // 3️⃣ 나머지는 비활성화
+        for (int i = 1; i < items.Length; i++)
         {
-            items[i].gameObject.SetActive(false);  // 6번부터 
+            items[i].gameObject.SetActive(false);
         }
 
-        // 3️⃣ +N 표시
-        int overflow = items.Length - slots.Count;
-        overflowIndicator.SetActive(overflow > 0);
-        if (overflow > 0)
-            overflowText.text = $"+{overflow}";
+        UpdateBufferState(items.Length);
     }
 
+    private void UpdateBufferState(int count)
+    {
+        BufferState newState;
+
+        if (count == 0)
+            newState = BufferState.Empty;
+        else if (count == 1)
+            newState = BufferState.Processing;
+        else
+            newState = BufferState.Backlog;
+
+        if (newState != currentState)
+        {
+            currentState = newState;
+            OnBufferStateChanged?.Invoke(currentState);
+        }
+    }
 
 }

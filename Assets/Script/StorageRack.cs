@@ -5,10 +5,16 @@ using System.Collections.Generic;
 public class StorageRack : MonoBehaviour
 {
     [SerializeField] private List<Transform> slots = new List<Transform>();
+
+    public event Action<int, string> OnStorageUpdated;
+    [SerializeField] private int totalCount = 0;
+    private string lastInTime = "_";
+
     public int currentIndex = 0;
 
     [SerializeField] private ItemPool itemPool;
 
+    public int maxCapacity => slots.Count;
     /// <summary>
     /// OK 아이템을 스토리지 슬롯에 적재
     /// </summary>
@@ -40,6 +46,11 @@ public class StorageRack : MonoBehaviour
 
         currentIndex++;
 
+        totalCount++;
+        lastInTime = DateTime.Now.ToString("HH:mm:ss");
+
+        OnStorageUpdated?.Invoke(totalCount, lastInTime);
+
         Debug.Log($"[StorageRack] 아이템 적재 완료 ({currentIndex}/{slots.Count})");
 
     }
@@ -67,6 +78,14 @@ public class StorageRack : MonoBehaviour
         }
 
         currentIndex = 0;
+
+        if (totalCount != 0)
+        {
+            totalCount = 0;
+            lastInTime = "-";
+
+            OnStorageUpdated?.Invoke(totalCount, lastInTime);
+        }
         Debug.Log("[StorageRack] 초기화 완료");
     }
 

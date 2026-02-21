@@ -6,8 +6,15 @@ public enum CameraMode
     Observer
 }
 
+public enum InputMode
+{
+    Camera,
+    UI
+}
+
 public class CameraRigController : MonoBehaviour
 {
+    public InputMode CurrentInputMode;
     public Transform fixedViewPoint;
     public Transform observerStartPoint;
     public ObserverCameraController observerController;
@@ -23,6 +30,8 @@ public class CameraRigController : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.Tab))
         {
+            if(CurrentInputMode == InputMode.UI)
+                return;
             ToggleMode();
         }
     }
