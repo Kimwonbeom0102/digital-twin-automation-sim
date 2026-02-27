@@ -519,7 +519,7 @@ public class RobotArmController : MonoBehaviour
             if (localTarget.sqrMagnitude < 0.0001f)
                 yield break;
 
-            // 항상 "아래쪽" 반공간(로컬 Y- 영역)만 보도록 강제
+            // 항상 아래쪽 반공간(로컬 Y- 영역)만 보도록 강제
             Vector3 targetDir = localTarget.normalized;
             if (targetDir.z > 0f)
             {
@@ -643,7 +643,7 @@ public class RobotArmController : MonoBehaviour
         // 나중에 연결 존3 피더포인트 포지션 지점에 도착해서 오픈그립을 호출하면
         // 아이템은 아래로 낙하(어떻게 낙하?)
         // 조건 : 오픈그립을 하면
-        // DropItem 호출
+        // DropItem 호출 -> 호출은 시퀀스 코루틴 내부
 
         if(leftHand == null || rightHand == null) return;
 
@@ -684,7 +684,7 @@ public class RobotArmController : MonoBehaviour
     public void DropItem(bool zone3IsRunning = true)
     {
         // 피더 포인트 지점이 맞고
-        // // 아이템 != Null 아니면
+        // 아이템 != Null 아니면
         // 아이템은 존3 싱크 포인트로 이동
 
         if (heldItem == null) 
@@ -748,7 +748,7 @@ public class RobotArmController : MonoBehaviour
                 // route가 없어도 OnDropped는 호출 (아이템이 이미 경로를 가지고 있을 수 있음)
             }
            
-            itemComp.OnDropped(1);  // ★★ 여기만 호출하면 됨
+            itemComp.OnDropped(1);  // 여기만 호출하면 됨
             Debug.Log("[DropItem] 아이템 정상 드롭 완료");
         }
 

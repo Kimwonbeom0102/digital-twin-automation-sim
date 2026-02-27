@@ -26,6 +26,7 @@ public class ZoneManager : MonoBehaviour
 
     [Header("Feeder Settings")]
     public int zoneId;          // 1,2,3
+    public int ZoneId => zoneId;
     public string zoneName;
     [SerializeField] private float spawnInterval = 5f; // 존1 피더에서 생성되는 주기 
     [SerializeField] private float transferDelay = 4f;  // 싱크에 들어갔다가 피더에서 다시 생성되는 주기
@@ -125,8 +126,9 @@ public class ZoneManager : MonoBehaviour
             Debug.LogWarning($"[Zone] {zoneId} Sink 없음");
         }
 
-        State = ZoneState.Stopped;
-        UpdateZoneUI();
+        Setstate(ZoneState.Stopped);
+        // State = ZoneState.Stopped;
+        // UpdateZoneUI();
         
         if (Role != ZoneRole.Conveyor)  return;
 
@@ -152,13 +154,26 @@ public class ZoneManager : MonoBehaviour
     }
 
     // 전이 메서드 - 추후에 통일
-    private void Setstate(ZoneState s)
+    public void Setstate(ZoneState newState)
     {
-        if (State == s) return;
-        State = s;
+        if (State == newState) return;
+        ZoneState oldState = State;
+        State = newState;
 
-        // UpdateZoneUI(); // 추후 추가예정
+        ApplyStateEffects(oldState, newState);
+
+        UpdateZoneUI(); 
         OnStateChanged?.Invoke(State);
+    }
+
+    private void ApplyStateEffects(ZoneState oldState, ZoneState newState)
+    {
+        UpdateZoneUI();
+
+        if (oldState == ZoneState.Fault && newState == ZoneState.Running)
+        {
+            // Fault 해제 로직
+        }
     }
  
     private void TryStartSinkDequeue()  // Zone2에만 해당 
@@ -356,7 +371,8 @@ public class ZoneManager : MonoBehaviour
         if (State != ZoneState.Running)
             return;
 
-        State = ZoneState.Warning;
+        // State = ZoneState.Warning;
+        Setstate(ZoneState.Warning);
         OnStateChanged?.Invoke(State);
 
         Debug.Log($"[Zone {zoneId}] Warning 발생");
@@ -388,11 +404,11 @@ public class ZoneManager : MonoBehaviour
 
         // Plant가 Running이면 Running 복구
         if (plant != null && plant.State == PlantState.Running)
-            State = ZoneState.Running;
+            // State = ZoneState.Running;
+            Setstate(ZoneState.Running);
         else
-            State = ZoneState.Stopped;
-
-        OnStateChanged?.Invoke(State);
+            // State = ZoneState.Stopped;
+            Setstate(ZoneState.Stopped);
     }
 
     private IEnumerator ResumeConveyorRoutine()
@@ -425,11 +441,8 @@ public class ZoneManager : MonoBehaviour
         if(State != ZoneState.Fault) return;
 
         HasActiveFault = false; // 문제 해결 
-        State = ZoneState.Stopped; // 멈춤상태 
-        UpdateZoneUI();
+        Setstate(ZoneState.Stopped);
         Debug.Log($"[Zone] {zoneId} Fault 제거! -> {State}"); 
-        // StartFeeder(); 
-        OnStateChanged?.Invoke(State);
     }
     
     // === 어떤 조건에서 이 메서드 호출해서
@@ -439,10 +452,8 @@ public class ZoneManager : MonoBehaviour
         if(State == ZoneState.Fault) return;
 
         HasActiveFault = true;
-        State = ZoneState.Fault;
-        UpdateZoneUI();
+        Setstate(ZoneState.Fault);
         OnZoneFault?.Invoke(this);     // 존매니저의 문제발생 메서드 넘겨줌 
-        OnStateChanged?.Invoke(State);
         StopFeeder();
 
         Debug.Log($"[Zone {zoneId}]Fault 발생!");
@@ -455,8 +466,8 @@ public class ZoneManager : MonoBehaviour
         if (State != ZoneState.Warning)
             return;
 
-        State = ZoneState.Running;
-        OnStateChanged?.Invoke(State);
+        // State = ZoneState.Running;
+        Setstate(ZoneState.Running);
 
         Debug.Log($"[Zone {zoneId}] Running 복귀");
     }
@@ -525,9 +536,8 @@ public class ZoneManager : MonoBehaviour
         switch (Role)
         {
             case ZoneRole.Feeder:
-                State = ZoneState.Running;
-                UpdateZoneUI();
-                OnStateChanged?.Invoke(State);
+                // State = ZoneState.Running;
+                Setstate(ZoneState.Running);
                 StartFeeder();
                 break;
 
@@ -535,9 +545,8 @@ public class ZoneManager : MonoBehaviour
                 // 입력 다시 허용
                 canReceiveFromSink = true;
 
-                State = ZoneState.Running;
-                UpdateZoneUI();
-                OnStateChanged?.Invoke(State);
+                // State = ZoneState.Running;
+                Setstate(ZoneState.Running);
 
                 // 🔥 재동기화 (중요)
                 TryStartSinkDequeue();
@@ -545,9 +554,8 @@ public class ZoneManager : MonoBehaviour
                 break;
 
             case ZoneRole.Output:
-                State = ZoneState.Running;
-                UpdateZoneUI();
-                OnStateChanged?.Invoke(State);
+                // State = ZoneState.Running;
+                Setstate(ZoneState.Running);
                 break;
         }
 
@@ -573,12 +581,7 @@ public class ZoneManager : MonoBehaviour
             return;
         }
 
-        ZoneState oldState = State;
-        State = ZoneState.Running;
-
-        UpdateZoneUI();
-        if (oldState != State)
-            OnStateChanged?.Invoke(State);
+        Setstate(ZoneState.Running);
 
         DataLogger.Instance.LogEvent("ZoneRun", zoneName, "Zone run");
 
@@ -772,16 +775,10 @@ public class ZoneManager : MonoBehaviour
     {
         if(State != ZoneState.Running) return;
 
-        ZoneState oldState = State;
-        State = ZoneState.Stopped;
-        UpdateZoneUI();
+        Setstate(ZoneState.Stopped);
+        // UpdateZoneUI();
         StopFeeder();
         
-        // 상태 변경 이벤트 발생
-        if(oldState != State)
-        {
-            OnStateChanged?.Invoke(State);
-        }
     }
 
     public void ZoneStop()  // 특정 존만 정지
@@ -816,24 +813,17 @@ public class ZoneManager : MonoBehaviour
         {
             case ZoneRole.Feeder:
                 StopFeeder();
-                State = ZoneState.Stopped;
                 break;
 
             case ZoneRole.Conveyor:
-                // 입력만 차단
                 canReceiveFromSink = false;
-                State = ZoneState.Stopped;   // UI 표시용
                 break;
 
             case ZoneRole.Output:
-                State = ZoneState.Stopped;
                 break;
         }
 
-        UpdateZoneUI();
-
-        if (oldState != State)
-            OnStateChanged?.Invoke(State);
+        Setstate(ZoneState.Stopped);
 
         DataLogger.Instance.LogEvent("ZoneStop", zoneName, "Zone stopped");
     }

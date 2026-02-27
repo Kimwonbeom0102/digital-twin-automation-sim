@@ -45,6 +45,11 @@ public class PlantManager : MonoBehaviour
     public IReadOnlyList<ZoneManager> Zones => zones;
     public event Action<int> OnFaultCount;
 
+    // 서버에 경과 시간 전송 
+    private float simulationStartTime;
+    private Coroutine scenarioCoroutine;
+    [SerializeField] private ZoneFaultSender zoneFaultSender;
+    
     // 코루틴 제어
     // public bool feederOn {get; private set;} = false; // 실행 플래그  
     // private Coroutine feederCo; // 코루틴 핸들 
@@ -252,10 +257,32 @@ public class PlantManager : MonoBehaviour
             Debug.Log("[Plant] Fault 존재 - Run 불가");
             return;
         } 
-        
+
         SetState(PlantState.Running);
 
+        simulationStartTime = Time.time;
+
+        // 중복 방지
+        if (scenarioCoroutine != null)
+        {
+            StopCoroutine(scenarioCoroutine);
+        }
+
+        scenarioCoroutine = StartCoroutine(ScenarioCheckLoop());
+
         DataLogger.Instance.StartSession();
+    }
+
+    IEnumerator ScenarioCheckLoop()
+    {
+        while (State == PlantState.Running)
+        {
+            float elapsed = Time.time - simulationStartTime;
+
+            zoneFaultSender.SendElapsedTime(elapsed);
+
+            yield return new WaitForSeconds(1f);
+        }
     }
 
     // public void CmdPause() // 일시정지
@@ -315,6 +342,22 @@ public class PlantManager : MonoBehaviour
             endTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
         };
         DataLogger.Instance.EndSession(summary);
+    }
+
+    public void ApplyZoneStates(List<ZoneResponse> zoneResponses)
+    {
+        foreach (var response in zoneResponses)
+        {
+            Debug.Log("적용 시도 → ZoneId: " + response.id + " / Status: " + response.status);
+
+            foreach (var zone in zones)
+            {
+                if (zone.ZoneId == response.id)   // ZoneManager에 ZoneId 있어야 함
+                {
+                    zone.Setstate((ZoneState)response.status);
+                }
+            }
+        }
     }
 
     // public void CmdResume() // 재개, 다시시작

@@ -13,6 +13,7 @@ public class DesktopUIController : MonoBehaviour
     [SerializeField] private BufferZone buffer;
     [SerializeField] private RobotArmController robot;
     [SerializeField] private NgRack ngRack;
+    [SerializeField] private ZoneFaultSender zoneFaultSender;
 
     [Header("UI 버튼")]
     [SerializeField] private Button runButton;  // 
@@ -209,13 +210,12 @@ public class DesktopUIController : MonoBehaviour
 
     private void ZoneFaultClicked() 
     {
-        int index = UnityEngine.Random.Range(0, zones.Length);
+        float testElapsedTime = 20f;  // DB TriggerTime : 15 보다 큰 값
 
-        ZoneManager targetZone = zones[index];
+        Debug.Log($"시나리오 체크 요청 → ElapsedTime: {testElapsedTime}");
 
-        Debug.Log($"강제 Fault 발생 -> Zone {targetZone.zoneId}");
-        
-        targetZone.RaiseFault();
+        zoneFaultSender.SendElapsedTime(testElapsedTime);
+        // targetZone.RaiseFault();
     }
 
     private void OnRunClicked()  // 전원 on 스위치 Plant

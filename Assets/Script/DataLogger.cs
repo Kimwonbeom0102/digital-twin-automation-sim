@@ -23,6 +23,8 @@ public class DataLogger : MonoBehaviour
         DontDestroyOnLoad(gameObject);
 
         InitLogPath();
+
+        currentSession = new SessionData();
     }
 
     private void InitLogPath()
@@ -56,6 +58,11 @@ public class DataLogger : MonoBehaviour
 
     public void LogEvent(string type, string zone, string message)
     {
+        if(currentSession == null)
+        {
+            currentSession = new SessionData();
+        }
+        
         currentSession.events.Add(new EventLog
         {
             time = DateTime.Now.ToString("HH:mm:ss.fff"),
