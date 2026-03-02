@@ -95,12 +95,4 @@ Fault 전파 이후 Plant 상태를 재평가하여
 ### Database
 - SQLite
 
----
 
-## 🚀 How to Run
-
-### 1️⃣ Server 실행
-
-```bash
-cd AutoSimServer
-dotnet run
