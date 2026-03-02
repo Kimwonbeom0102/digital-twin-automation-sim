@@ -22,7 +22,7 @@ AutoSim은 제조 공정을 단순 시각화하는 것이 아니라
 ## System Architecture
 
 <p align="center">
-  <img src="docs/System_Architecture.png" width="850">
+  <img src="docs/system_architecture.png" width="850">
 </p>
 
 Unity Client는 공정 상태를 시각화하고,  
@@ -38,14 +38,14 @@ ASP.NET Core Web API를 통해 Zone 상태를 서버와 동기화합니다.
 ## State Transition
 
 <p align="center">
-  <img src="docs/State_Transition.png" width="750">
+  <img src="docs/state_transition.png" width="750">
 </p>
 
 Plant는 `Stopped / Running / Fault` 상태를 enum 기반으로 관리합니다.
 
-- Run() → Running 전환
-- Zone Fault 발생 → Fault 상태 전환
-- ClearFault() → 상태 검증 후 Resume 가능
+- Run() → Running 전환  
+- Zone Fault 발생 → Fault 상태 전환  
+- ClearFault() → 상태 검증 후 Resume 가능  
 
 상태 전이 로직과 실행 로직을 분리하여  
 예측 가능한 흐름을 유지하도록 설계했습니다.
@@ -55,7 +55,7 @@ Plant는 `Stopped / Running / Fault` 상태를 enum 기반으로 관리합니다
 ## Fault Propagation Logic
 
 <p align="center">
-  <img src="docs/Fault_propagation.png" width="750">
+  <img src="docs/fault_propagation.png" width="750">
 </p>
 
 특정 Zone에서 Fault가 발생하면  
