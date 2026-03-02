@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections;
 using System;
 using TMPro;
+using UnityEngine.UI;
 
 public enum ZoneRole
 {
@@ -23,6 +24,7 @@ public enum ZoneState
 public class ZoneManager : MonoBehaviour
 {
     [SerializeField] private PlantManager plant;
+    [SerializeField] private ZoneCommandSender zoneCommandSender;
 
     [Header("Feeder Settings")]
     public int zoneId;          // 1,2,3
@@ -32,6 +34,7 @@ public class ZoneManager : MonoBehaviour
     [SerializeField] private float transferDelay = 4f;  // 싱크에 들어갔다가 피더에서 다시 생성되는 주기
     [SerializeField] private float faultProbability = 0.05f;
     [SerializeField] private Sensor[] sensors;
+    
 
     public RobotArmController robot;
 
@@ -53,6 +56,8 @@ public class ZoneManager : MonoBehaviour
 
     [Header("UI")]
     [SerializeField] private TMP_Text zoneNameText;
+    [SerializeField] private Button controlButton;
+    [SerializeField] private TMP_Text buttonText;
 
 
     // [Header("Zone2 Pickup/Buffer")]
@@ -108,6 +113,8 @@ public class ZoneManager : MonoBehaviour
 
     void Awake()
     {
+        buttonText.text = "Stop";
+        controlButton.image.color = Color.red;
         // if(sensors == null || sensors.Length == 0)
         //     sensors = GetComponentInChild<Sensor>(includeInactive: true);
         foreach(var s in sensors)
@@ -379,21 +386,27 @@ public class ZoneManager : MonoBehaviour
     }
 
 
-    public void ToggleUserStop() 
+    public void ToggleUserStop()
     {
         isUserStopped = !isUserStopped;
 
         if (isUserStopped)
-        {   
-            // 사용자에 의한 정지: 현재 상태에 상관없이 안전하게 Stopped로 전환
+        {
             ZoneStop();
             Debug.Log($"[Zone {zoneId}] 사용자 STOP");
+
+            //  UX 추가
+            buttonText.text = "Resume";
+            controlButton.image.color = Color.green;
         }
         else
-        {   
-            // 사용자 재개: 큐에 쌓인 아이템을 우선 처리한 뒤 정상 Running 상태로 복귀
+        {
             ResumeZone();
             Debug.Log($"[Zone {zoneId}] 사용자 RESUME");
+
+            //  UX 추가
+            buttonText.text = "Stop";
+            controlButton.image.color = Color.red;
         }
     }
 
@@ -581,7 +594,8 @@ public class ZoneManager : MonoBehaviour
             return;
         }
 
-        Setstate(ZoneState.Running);
+        // Setstate(ZoneState.Running);
+        zoneCommandSender.RequestZoneRun(zoneId);
 
         DataLogger.Instance.LogEvent("ZoneRun", zoneName, "Zone run");
 

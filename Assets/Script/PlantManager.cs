@@ -48,7 +48,7 @@ public class PlantManager : MonoBehaviour
     // 서버에 경과 시간 전송 
     private float simulationStartTime;
     private Coroutine scenarioCoroutine;
-    [SerializeField] private ZoneFaultSender zoneFaultSender;
+    [SerializeField] private ZoneCommandSender zoneCommandSender;
     
     // 코루틴 제어
     // public bool feederOn {get; private set;} = false; // 실행 플래그  
@@ -279,7 +279,7 @@ public class PlantManager : MonoBehaviour
         {
             float elapsed = Time.time - simulationStartTime;
 
-            zoneFaultSender.SendElapsedTime(elapsed);
+            zoneCommandSender.SendElapsedTime(elapsed);
 
             yield return new WaitForSeconds(1f);
         }

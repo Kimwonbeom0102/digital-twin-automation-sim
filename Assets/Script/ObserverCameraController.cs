@@ -3,6 +3,7 @@ using UnityEngine;
 public class ObserverCameraController : MonoBehaviour
 {
     public Transform cameraTransform;
+    public Rigidbody rb;
     public float moveSpeed = 6f;
     public float lookSpeed = 2f;
     public float boostMultiplier = 2f;
@@ -22,9 +23,14 @@ public class ObserverCameraController : MonoBehaviour
     {
         rotX += Input.GetAxis("Mouse X") * lookSpeed * 100f * Time.deltaTime;
         rotY -= Input.GetAxis("Mouse Y") * lookSpeed * 100f * Time.deltaTime;
+
         rotY = Mathf.Clamp(rotY, -80f, 80f);
 
-        cameraTransform.rotation = Quaternion.Euler(rotY, rotX, 0f);
+        // 좌우 회전은 Root
+        transform.rotation = Quaternion.Euler(0f, rotX, 0f);
+
+        // 상하 회전은 Camera
+        cameraTransform.localRotation = Quaternion.Euler(rotY, 0f, 0f);
     }
 
     void HandleMove()
@@ -33,10 +39,12 @@ public class ObserverCameraController : MonoBehaviour
             ? moveSpeed * boostMultiplier
             : moveSpeed;
 
-        Vector3 dir =
-            cameraTransform.forward * Input.GetAxis("Vertical") +
-            cameraTransform.right * Input.GetAxis("Horizontal");
+        Vector3 moveDir =
+            transform.forward * Input.GetAxis("Vertical") +
+            transform.right * Input.GetAxis("Horizontal");
 
-        cameraTransform.position += dir * speed * Time.deltaTime;
+        moveDir.Normalize();
+
+        rb.MovePosition(rb.position + moveDir * speed * Time.deltaTime);
     }
 }

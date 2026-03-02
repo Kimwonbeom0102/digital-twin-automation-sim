@@ -14,6 +14,8 @@ public enum InputMode
 
 public class CameraRigController : MonoBehaviour
 {
+    private bool isObserverMode = false;
+    [SerializeField] private GameObject testPanel;
     public InputMode CurrentInputMode;
     public Transform fixedViewPoint;
     public Transform observerStartPoint;
@@ -23,6 +25,7 @@ public class CameraRigController : MonoBehaviour
 
     void Start()
     {
+        isObserverMode = false;
         SetMode(CameraMode.Fixed);
     }
 
@@ -49,27 +52,41 @@ public class CameraRigController : MonoBehaviour
     {
         currentMode = mode;
 
+        // 이동 주체는 ObserverRoot
+        Transform root = observerController.transform;
+
         if (mode == CameraMode.Fixed)
         {
             observerController.enabled = false;
 
-            Transform cam = observerController.cameraTransform;
-            cam.position = fixedViewPoint.position;
-            cam.rotation = fixedViewPoint.rotation;
+            // Rigidbody 완전 정지
+            observerController.rb.velocity = Vector3.zero;
+            observerController.rb.angularVelocity = Vector3.zero;
+
+            // Root 위치 이동
+            root.position = fixedViewPoint.position;
+            root.rotation = fixedViewPoint.rotation;
 
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
+            isObserverMode = false;
+
+            testPanel.SetActive(true);
         }
         else
         {
-            Transform cam = observerController.cameraTransform;
-            cam.position = observerStartPoint.position;
-            cam.rotation = observerStartPoint.rotation;
+            // Root 위치 이동
+            root.position = observerStartPoint.position;
+            root.rotation = observerStartPoint.rotation;
 
             observerController.enabled = true;
 
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+            isObserverMode = true;
+
+            testPanel.SetActive(false);
         }
+    
     }
 }

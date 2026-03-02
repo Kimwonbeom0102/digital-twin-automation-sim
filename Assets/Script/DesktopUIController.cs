@@ -6,6 +6,8 @@ using System.Collections.Generic;
 
 public class DesktopUIController : MonoBehaviour
 {
+    private bool isTestMode = false;
+
     [Header("매니저 연결")]
     [SerializeField] private PlantManager plantManager;  // ★ 플랜트 매니저 참조 (인스펙터 연결)
     [SerializeField] private ZoneManager[] zones;
@@ -13,7 +15,8 @@ public class DesktopUIController : MonoBehaviour
     [SerializeField] private BufferZone buffer;
     [SerializeField] private RobotArmController robot;
     [SerializeField] private NgRack ngRack;
-    [SerializeField] private ZoneFaultSender zoneFaultSender;
+    [SerializeField] private ZoneCommandSender zoneCommandSender;
+
 
     [Header("UI 버튼")]
     [SerializeField] private Button runButton;  // 
@@ -35,6 +38,7 @@ public class DesktopUIController : MonoBehaviour
     [SerializeField] private TMP_Text totalText;  // 전체 카운트 UI
     [SerializeField] private TMP_Text ngText;     // NG 카운트 UI (있으면)
     [SerializeField] private TMP_Text okText;     // Ok 카운트 UI (있으면)
+    // [SerializeField] private TMP_Text plantText;
     [SerializeField] private TMP_Text robotFlowText;
     [SerializeField] private TMP_Text bufferQueueText;
     [SerializeField] private TMP_Text storageTotalText;
@@ -42,6 +46,9 @@ public class DesktopUIController : MonoBehaviour
     [SerializeField] private TMP_Text ngTotalText;
     [SerializeField] private TMP_Text ngLastInText;
     // [SerializeField] private Button resumeButton;
+    [SerializeField] private Button scenarioButton;
+    [SerializeField] private Button testButton;
+    [SerializeField] private GameObject testPanel;
 
     void Start()
     {
@@ -63,7 +70,8 @@ public class DesktopUIController : MonoBehaviour
         zoneClearButton.onClick.AddListener(ZoneClearClicked);
         okResetButton.onClick.AddListener(OkResetClicked);
         ngResetButton.onClick.AddListener(NgResetClicked);
-
+        isTestMode = false;   // 기본은 Scenario
+        UpdateModeUI();
         // eStopOnButton.onClick.AddListener(OnEStopOnClicked);
         // eStopOffButton.onClick.AddListener(OnEStopOffClicked);
         // clearFaultButton.onClick.AddListener(OnClearFaultClicked);
@@ -110,6 +118,29 @@ public class DesktopUIController : MonoBehaviour
             ngRack.OnNgUpdated -= UpdateNgUI;
     }
 
+    public void SetScenarioMode()
+    {
+        isTestMode = false;
+        UpdateModeUI();
+    }
+
+    public void SetTestMode()
+    {
+        isTestMode = true;
+        UpdateModeUI();
+    }
+
+    private void UpdateModeUI()
+    {
+        Color activeColor = new Color(0.2f, 0.5f, 1f);
+        Color inactiveColor = Color.gray;
+
+        scenarioButton.image.color = isTestMode ? inactiveColor : activeColor;
+        testButton.image.color = isTestMode ? activeColor : inactiveColor;
+
+        testPanel.SetActive(isTestMode);
+    }
+
     private void UpdateStorageUI(int total, string time)
     {
         storageTotalText.text = $"Total : {total}";
@@ -127,6 +158,8 @@ public class DesktopUIController : MonoBehaviour
     {
         ngTotalText.text = $"Total : {ngtotal}";
         ngLastInText.text = $"Last In : {time}";
+
+        Color c = Color.red;
     }
 
     private void UpdateQueueText(int count)
@@ -175,15 +208,10 @@ public class DesktopUIController : MonoBehaviour
     }
 
     private void ZoneClearClicked()
-    {  
+    {
         if (zones == null) return;
-
-        plantManager.ResetFault();
-        // var z = plantManager.GetLastFaultZone();
-        // if( z != null)  // 문제 발생한 존을 가져와서
-        // {
-        //     z.ClearFault();  // 클리어해줌 
-        // }
+        zoneCommandSender.RequestReset();
+        // plantManager.ResetFault();
     }
 
     private void OkResetClicked()
@@ -214,7 +242,7 @@ public class DesktopUIController : MonoBehaviour
 
         Debug.Log($"시나리오 체크 요청 → ElapsedTime: {testElapsedTime}");
 
-        zoneFaultSender.SendElapsedTime(testElapsedTime);
+        zoneCommandSender.SendElapsedTime(testElapsedTime);
         // targetZone.RaiseFault();
     }
 
