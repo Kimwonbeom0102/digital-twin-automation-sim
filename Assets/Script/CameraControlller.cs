@@ -14,9 +14,10 @@ public enum InputMode
 
 public class CameraRigController : MonoBehaviour
 {
-    private bool isObserverMode = false;
     [SerializeField] private GameObject testPanel;
+
     public InputMode CurrentInputMode;
+
     public Transform fixedViewPoint;
     public Transform observerStartPoint;
     public ObserverCameraController observerController;
@@ -25,7 +26,6 @@ public class CameraRigController : MonoBehaviour
 
     void Start()
     {
-        isObserverMode = false;
         SetMode(CameraMode.Fixed);
     }
 
@@ -33,8 +33,9 @@ public class CameraRigController : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.Tab))
         {
-            if(CurrentInputMode == InputMode.UI)
+            if (CurrentInputMode == InputMode.UI)
                 return;
+
             ToggleMode();
         }
     }
@@ -52,30 +53,26 @@ public class CameraRigController : MonoBehaviour
     {
         currentMode = mode;
 
-        // 이동 주체는 ObserverRoot
         Transform root = observerController.transform;
 
         if (mode == CameraMode.Fixed)
         {
             observerController.enabled = false;
 
-            // Rigidbody 완전 정지
-            observerController.rb.velocity = Vector3.zero;
-            observerController.rb.angularVelocity = Vector3.zero;
+            observerController.StopMotion();
 
-            // Root 위치 이동
             root.position = fixedViewPoint.position;
             root.rotation = fixedViewPoint.rotation;
 
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
-            isObserverMode = false;
 
             testPanel.SetActive(true);
         }
         else
         {
-            // Root 위치 이동
+            observerController.StopMotion();
+
             root.position = observerStartPoint.position;
             root.rotation = observerStartPoint.rotation;
 
@@ -83,10 +80,8 @@ public class CameraRigController : MonoBehaviour
 
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
-            isObserverMode = true;
 
             testPanel.SetActive(false);
         }
-    
     }
 }

@@ -26,9 +26,6 @@ Material:
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
   - _EMISSION
-  - _NORMALMAP
-  - _OCCLUSIONMAP
-  - _PARALLAXMAP
   - _SPECULAR_SETUP
   m_InvalidKeywords:
   - _BumpMap
@@ -71,7 +68,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
-        m_Texture: {fileID: 2800000, guid: 55b783b9df549e1438065772e46bede9, type: 3}
+        m_Texture: {fileID: 0}
         m_Scale: {x: 100, y: 100}
         m_Offset: {x: 0, y: 0}
     - _MetallicGlossMap:
