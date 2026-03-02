@@ -1,75 +1,106 @@
-# Digital Twin Automation Simulation (Unity)
+# AutoSim – State-driven Industrial Process Simulation
 
-## 프로젝트 개요
-
-Unity 기반으로 설계한 **상태(State) 중심 디지털 트윈 공정 제어 시뮬레이션 프로젝트**입니다.
-
-자동화 생산 라인의 흐름을  
-단순 시각화가 아닌 **상태(State)와 이벤트(Event) 구조**로 모델링하여  
-가상 환경에서 검증 가능하도록 구현했습니다.
+Unity 기반 공정 시뮬레이션 시스템으로,  
+enum 기반 상태 제어 구조와 Fault 전파 로직을 설계하고  
+ASP.NET Core Web API + SQLite 연동을 통해 데이터 중심 제어 아키텍처를 구현했습니다.
 
 ---
 
-## 기획 의도
+## Project Overview
 
-- 로그·데이터로만 존재하던 공정 상태를 시각적으로 표현
-- 공정 흐름·병목·예외(Fault)를 구조적으로 이해 가능하게 설계
-- 시스템 동작 자체를 코드 구조로 설명하는 시뮬레이션 구현
+AutoSim은 제조 공정을 단순 시각화하는 것이 아니라  
+**상태 기반 제어(State-driven control)** 와  
+**Fault 전파 구조(Fault propagation logic)** 를 중심으로 설계된 시뮬레이션 시스템입니다.
 
----
-
-## 핵심 설계 목표
-
-- 상태 기반 제어 아키텍처 설계
-- Stop / Resume / Fault 전파 흐름 모델링
-- Queue 기반 Buffer 시스템 구현
-- Update() 의존 최소화 (이벤트 중심 구조)
-- 서버 기반 상태 동기화 구조 확장
+- Zone 단위 상태 관리
+- Plant 전체 상태 재평가 구조
+- Server 기반 시나리오 제어
+- Unity ↔ ASP.NET Core REST API 연동
 
 ---
 
-## 아키텍처 구조
+## System Architecture
 
-### State Layer
+<p align="center">
+  <img src="docs/System_Architecture.png" width="850">
+</p>
 
-- PlantState
-- ZoneState
-- RobotState
+Unity Client는 공정 상태를 시각화하고,  
+ASP.NET Core Web API를 통해 Zone 상태를 서버와 동기화합니다.
 
-각 단위를 상태 머신처럼 설계하고  
-명시적인 이벤트를 통해서만 상태가 전이되도록 구현했습니다.
+서버는 EF Core를 사용해 SQLite DB의 Zone 및 FaultScenario 데이터를 조회하며,  
+응답된 ZoneResponse를 기반으로 Unity의 `ApplyZoneStates()`를 호출합니다.
 
----
-
-### Event-Driven Flow
-
-- Sensor 감지 → 이벤트 전달 → Robot 작업 트리거
-- Fault 발생 → Spawn 제어 중단
-- Resume → Delay 기반 Queue 복구
-- 서버 시나리오 응답 → Zone 상태 동기화
+이를 통해 **시뮬레이션 로직과 데이터 제어를 분리**했습니다.
 
 ---
 
-### Buffer & Queue
+## State Transition
 
-- Max Capacity 제한
-- Overflow 시 +N 시각화
-- Assign / Release 로직 분리
-- Queue 기반 비동기 처리
+<p align="center">
+  <img src="docs/State_Transition.png" width="750">
+</p>
+
+Plant는 `Stopped / Running / Fault` 상태를 enum 기반으로 관리합니다.
+
+- Run() → Running 전환
+- Zone Fault 발생 → Fault 상태 전환
+- ClearFault() → 상태 검증 후 Resume 가능
+
+상태 전이 로직과 실행 로직을 분리하여  
+예측 가능한 흐름을 유지하도록 설계했습니다.
 
 ---
 
-## 서버 연동 (Scenario 기반 Fault 시스템)
+## Fault Propagation Logic
 
-- Unity → ElapsedTime 전송
-- ASP.NET Core Web API → 시나리오 판단
-- SQLite → Fault 조건 데이터 관리
-- 서버 응답 → Zone 상태 동기화
+<p align="center">
+  <img src="docs/Fault_propagation.png" width="750">
+</p>
 
-구조 흐름:
+특정 Zone에서 Fault가 발생하면  
+상위/하위 Zone에 Stop 상태를 전파합니다.
 
-Plant Run  
-→ SendElapsedTime()  
-→ POST /api/Zone/check-scenario  
-→ 서버 시나리오 판단  
-→ Zone
+Fault 전파 이후 Plant 상태를 재평가하여  
+전체 상태 정합성을 유지하도록 설계했습니다.
+
+이를 통해 단일 Zone 오류가 시스템 전반에 미치는 영향을  
+구조적으로 제어할 수 있도록 구성했습니다.
+
+---
+
+## Core Design Concepts
+
+- enum 기반 상태 제어 구조
+- bool 남용 제거 및 상태 전이 명확화
+- 이벤트 기반 공정 흐름 처리
+- Queue 기반 Buffer 관리
+- Fault → Stop → Resume 복구 설계
+- Client-Server 책임 분리 구조
+
+---
+
+## Tech Stack
+
+### Client
+- Unity (C#)
+- UnityWebRequest
+- Event-driven Architecture
+
+### Server
+- ASP.NET Core (.NET 8)
+- Entity Framework Core
+- REST API
+
+### Database
+- SQLite
+
+---
+
+## 🚀 How to Run
+
+### 1️⃣ Server 실행
+
+```bash
+cd AutoSimServer
+dotnet run
