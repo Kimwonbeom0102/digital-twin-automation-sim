@@ -238,12 +238,17 @@ public class DesktopUIController : MonoBehaviour
 
     private void ZoneFaultClicked() 
     {
-        float testElapsedTime = 20f;  // DB TriggerTime : 15 보다 큰 값
-
-        Debug.Log($"시나리오 체크 요청 → ElapsedTime: {testElapsedTime}");
-
-        zoneCommandSender.SendElapsedTime(testElapsedTime);
-        // targetZone.RaiseFault();
+        //직접 fault 발생
+        if(isTestMode)
+        {
+            zoneCommandSender.RequestZoneFault(2); // 어디에 줄건지?
+        }
+        else
+        {
+            //강제트리거
+            float testelapsedTime = 20f;
+            zoneCommandSender.SendElapsedTime(testelapsedTime); 
+        }
     }
 
     private void OnRunClicked()  // 전원 on 스위치 Plant

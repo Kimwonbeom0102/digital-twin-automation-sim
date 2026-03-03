@@ -344,7 +344,7 @@ public class PlantManager : MonoBehaviour
         DataLogger.Instance.EndSession(summary);
     }
 
-    public void ApplyZoneStates(List<ZoneResponse> zoneResponses)
+    public void ApplyZoneStates(ZoneResponse[] zoneResponses)
     {
         foreach (var response in zoneResponses)
         {
@@ -354,7 +354,11 @@ public class PlantManager : MonoBehaviour
             {
                 if (zone.ZoneId == response.id)   // ZoneManager에 ZoneId 있어야 함
                 {
+                    
                     zone.Setstate((ZoneState)response.status);
+                    
+                    // zone.Setstate((ZoneState)response.status);
+                    
                 }
             }
         }

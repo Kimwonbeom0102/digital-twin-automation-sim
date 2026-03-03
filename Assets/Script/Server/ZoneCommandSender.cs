@@ -75,9 +75,7 @@ public class ZoneCommandSender : MonoBehaviour
             ZoneResponse response =
                 JsonUtility.FromJson<ZoneResponse>(www.downloadHandler.text);
 
-            plantManager.ApplyZoneStates(
-                new List<ZoneResponse> { response }
-            );
+            plantManager.ApplyZoneStates(new ZoneResponse[]{response});
         }
         else
         {
@@ -98,7 +96,7 @@ public class ZoneCommandSender : MonoBehaviour
             ZoneResponseArray response =
                 JsonUtility.FromJson<ZoneResponseArray>(www.downloadHandler.text);
 
-            plantManager.ApplyZoneStates(response.zones.ToList());
+            plantManager.ApplyZoneStates(response.zones);
         }
         else
         {
@@ -130,13 +128,76 @@ public class ZoneCommandSender : MonoBehaviour
                 var response =
                     JsonUtility.FromJson<ZoneResponseArray>(www.downloadHandler.text);
 
-                plantManager.ApplyZoneStates(response.zones.ToList());
+                plantManager.ApplyZoneStates(response.zones);
             }
             else
             {
                 Debug.LogError("ZoneRun 서버 요청 실패");
                 Debug.LogError($"ZoneRun 실패: {www.responseCode} / {www.error}");
                 Debug.LogError("Response Body: " + www.downloadHandler.text);
+            }
+        }
+    }
+
+    public void RequestZoneWarning(int zoneId)
+    {
+        StartCoroutine(PostZoneWarning(zoneId));
+    }
+
+    private IEnumerator PostZoneWarning(int zoneId)
+    {
+        var request = new ZoneRunRequest { ZoneId = zoneId };
+        string json = JsonUtility.ToJson(request);
+
+        using (UnityWebRequest www = new UnityWebRequest(baseUrl + "/warning", "POST"))
+        {
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+
+            www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            www.downloadHandler = new DownloadHandlerBuffer();
+            www.SetRequestHeader("Content-Type", "application/json");
+
+            yield return www.SendWebRequest();
+
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError($"ZoneWarning 실패: {www.responseCode} / {www.error}");
+                Debug.LogError("Response Body: " + www.downloadHandler.text);
+            }
+            else
+            {
+                Debug.Log($"Zone {zoneId} Warning 요청 성공");
+                // ❗ 상태 반영은 Polling에서 처리
+            }
+        }
+    }
+
+    public void RequestZoneStop(int zoneId)
+    {
+        StartCoroutine(PostZoneStop(zoneId));
+    }
+
+    private IEnumerator PostZoneStop(int zoneId)
+    {
+        var request = new ZoneRunRequest{ ZoneId = zoneId };
+        string json = JsonUtility.ToJson(request);
+
+        using (UnityWebRequest www = new UnityWebRequest(baseUrl + "/stop", "POST"))
+        {
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+            www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            www.downloadHandler = new DownloadHandlerBuffer();
+            www.SetRequestHeader("Content-Type", "application/json");
+
+            yield return www.SendWebRequest();
+
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError($"ZoneStop 실패: {www.responseCode} / {www.error}");
+            }
+            else
+            {
+                Debug.Log($"Zone {zoneId} Stop 요청 성공");
             }
         }
     }
@@ -173,28 +234,23 @@ public class ZoneCommandSender : MonoBehaviour
             ZoneResponse[] zones =
                 JsonUtility.FromJson<ZoneResponseArray>(www.downloadHandler.text).zones;
 
-            plantManager.ApplyZoneStates(zones.ToList());
+            plantManager.ApplyZoneStates(zones);
         }
-
         Debug.Log("서버 응답: " + www.downloadHandler.text);
     }
 
-    private ZoneManager FindZoneById(int id)
+    public void RequestZoneFault(int zoneId)
     {
-        ZoneManager[] zones = FindObjectsOfType<ZoneManager>();
+        var request = new ZoneRunRequest { ZoneId = zoneId };
+        string json = JsonUtility.ToJson(request);
 
-        foreach (var z in zones)
-        {
-            if (z.zoneId == id)
-                return z;
-        }
-
-        return null;
+        StartCoroutine(PostFaultRequest(json));
     }
 
-    IEnumerator PostRequest(string json)
+    private IEnumerator PostFaultRequest(string json)
     {
         UnityWebRequest www = new UnityWebRequest(baseUrl + "/fault", "POST");
+
         byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
 
         www.uploadHandler = new UploadHandlerRaw(bodyRaw);
@@ -205,34 +261,13 @@ public class ZoneCommandSender : MonoBehaviour
 
         if (www.result != UnityWebRequest.Result.Success)
         {
-            Debug.LogError("Error: " + www.error);
+            Debug.LogError("Fault 요청 실패: " + www.error);
         }
         else
         {
-            Debug.Log("Server Response: " + www.downloadHandler.text);
+            Debug.Log("Fault 요청 성공");
 
-            ZoneResponse response =
-                JsonUtility.FromJson<ZoneResponse>(www.downloadHandler.text);
-
-
-            Debug.Log("Zone ID :" + response.id);         
-            Debug.Log("Zone Name :" + response.zoneName);   
-            Debug.Log("Zone Status :" + response.status);   
-
-            ZoneManager targetZone = FindZoneById(response.id);
-
-            if (targetZone != null)
-            {
-                if (response.status == 2)   // 2 = Fault
-                {
-                    Debug.Log("서버 승인 → Fault 적용");
-                    targetZone.RaiseFault();
-                }
-            }
-            else
-            {
-                Debug.LogWarning("해당 Zone을 찾지 못함");
-            }
+            // 상태 반영은 Polling에서 처리
         }
     }
 
