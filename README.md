@@ -9,8 +9,6 @@ Unity 기반 공정 시뮬레이션 시스템으로
 
 ---
 
-## Project Overview
-
 # Project Overview
 
 AutoSim은 제조 공정의 상태 제어와 Fault 처리 흐름을 중심으로 설계된 시뮬레이션 시스템입니다.
