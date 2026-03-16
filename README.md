@@ -25,7 +25,7 @@ AutoSim은 제조 공정의 상태 제어와 Fault 처리 흐름을 중심으로
 ## System Architecture
 
 <p align="center">
-  <img src="docs/system_architecture.png" width="550">
+  <img src="docs/system_architecture.png" width="650">
 </p>
 
 Unity Client는 공정 상태를 시각화하고  
