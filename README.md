@@ -49,7 +49,7 @@ Plant 상태는 enum 기반 구조로 관리됩니다.
 - **Fault**
 
 Fault 발생 시 상태 전이를 통해 공정 흐름을 제어하며  
-ClearFault 이후 Resume이 가능하도록 설계했습니다.
+ClearFault 이후 Execute이 가능하도록 설계했습니다.
 
 ---
 
@@ -72,7 +72,7 @@ Fault 전파 이후 Plant 상태를 재평가하여
 - Enum 기반 State-driven Architecture
 - Event 기반 공정 흐름 처리
 - Queue 기반 Buffer 관리 구조
-- Fault → Stop → Resume 복구 흐름 설계
+- Fault → Stop → Execute 복구 흐름 설계
 - Client – Server 책임 분리 설계
 
 ---
